@@ -1,0 +1,437 @@
+#! /usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import logging
+from pymodbus.client.sync import ModbusSerialClient
+from osm.client import Client, CMD_SAVE_PARAMETERS
+from osm.device import OSM17
+
+import time
+import os
+if os.name == 'nt':                                 # sys.platform == 'win32':
+    from serial.tools.list_ports_windows import comports
+elif os.name == 'posix':
+    from serial.tools.list_ports_linux import SysFS
+    import glob
+
+    def comports():
+        devices = glob.glob('/dev/ttyS*')           # built-in serial ports
+        devices.extend(glob.glob('/dev/ttyUSB*'))   # usb-serial with own driver
+        devices.extend(glob.glob('/dev/ttyMI*'))    # MOXA serial devices
+        return [info
+                for info in [SysFS(d) for d in devices]
+                if info.subsystem != "platform"]    # hide non-present internal serial ports
+else:
+    raise ImportError("Sorry: no implementation for your platform ('{}') available".format(os.name))
+
+
+try:
+    import tkinter as Tkinter       # for Python3
+    from tkinter import ttk
+except:
+    import Tkinter                  # for Python2
+    import ttk
+
+
+logging.basicConfig()
+_logger = logging.getLogger('osm')
+_logger.setLevel(100)
+_console = logging.StreamHandler()
+_console.setLevel(100)
+_logger.addHandler(_console)
+
+
+class CreateToolTip(object):
+    ''' Create a tooltip for a given widget '''
+
+    def __init__(self, widget, text='widget info'):
+        self.widget = widget
+        self.text = text
+        self.tw = None
+        self.widget.bind("<Enter>", self.Enter)
+        self.widget.bind("<Leave>", self.Close)
+
+    def Enter(self, event=None):
+        x = self.widget.winfo_rootx() + 25
+        y = self.widget.winfo_rooty() + 20
+
+        self.tw = Tkinter.Toplevel(self.widget)
+        self.tw.wm_overrideredirect(True)
+        self.tw.wm_geometry("+%d+%d" % (x, y))
+
+        label = Tkinter.Label(self.tw, text=self.text, justify='left', background='#ffffe0')
+        label.pack(ipadx=1)
+
+        self.widget.after(3000, self.Close)
+
+    def Close(self, event=None):
+        if self.tw:
+            self.tw.destroy()
+
+
+class OsmGui():
+    def __init__(self):
+        self.root = Tkinter.Tk()
+        self.root.title("OSM GUI")
+
+        self.port_iid = list()
+        self.module_iid = list()
+
+        self.task = None
+        self.tick_task = None
+        self.id_awd10 = None
+        self.transport = None
+        self.id_osm = None
+
+        # Окно "Сканирование"
+
+        frame_scan = ttk.Frame(self.root, relief="groove", borderwidth=2)
+        frame_scan.pack(side="left", fill="both", ipady=2, ipadx=2, pady=2, padx=2, expand=True)
+
+        portframe = ttk.LabelFrame(frame_scan, text="Список портов в системе", labelanchor='n')
+        portframe.pack(side="top", fill="both", pady=2, padx=2, expand=True)
+
+        self.portlist = ttk.Treeview(portframe, columns=("Port"), selectmode='browse', height=5, show="headings")
+        self.portlist.column("Port", width=100, anchor='center')
+        self.portlist.heading("Port", text="Порт")
+        self.portlist.pack(side='left', fill='both', pady=2, padx=2, expand=True)
+        self.portlist.bind("<<TreeviewSelect>>", self.Port_Selected)
+
+        iterator = sorted(comports())
+        for n, (port, desc, hwid) in enumerate(iterator, 1):
+            iid = self.portlist.insert("" , "end", values=port)
+            self.port_iid.append(iid)
+
+        port_scroll = ttk.Scrollbar(portframe, orient="vertical", command=self.portlist.yview)
+        port_scroll.pack(side='right', fill='y')
+
+        self.portlist.configure(yscrollcommand=port_scroll.set)
+
+        self.varTimeout = Tkinter.DoubleVar()
+        self.spinTimeout = Tkinter.Spinbox(frame_scan, textvariable=self.varTimeout, format='%0.1f', from_=0.2, to=1.0, increment=0.1, width=13, justify="center")
+        self.spinTimeout.pack(side="top", pady=2, padx=2)
+        CreateToolTip(self.spinTimeout, '''Значение таймаута (сек)''')
+
+        self.frame11 = ttk.Frame(frame_scan)
+        self.frame11.pack(side="top", fill="x", pady=2, padx=2)
+
+        self.buttonScan = ttk.Button(self.frame11, text="Начать сканирование", state="disabled", command=self.Button_Scan)
+        self.buttonScan.pack(side="top", fill="x", pady=2, padx=2)
+
+        self.progressbar = ttk.Progressbar(self.frame11, maximum=32*8)
+
+        devframe = ttk.LabelFrame(frame_scan, text="Список активных модулей OSM", labelanchor='n')
+        devframe.pack(side="top", fill="both", pady=2, padx=2, expand=True)
+
+        self.modulelist = ttk.Treeview(devframe, columns=("address","baudrate"), selectmode='browse', height=5, show="headings")
+        self.modulelist.column("address", width=100, anchor='center')
+        self.modulelist.column("baudrate", width=100, anchor='center')
+        self.modulelist.heading("address", text="Адрес")
+        self.modulelist.heading("baudrate", text="Битрейт")
+        self.modulelist.pack(side='left', fill='both', pady=2, padx=2, expand=True)
+        self.modulelist.bind("<<TreeviewSelect>>", self.Module_Selected)
+
+        scroll = ttk.Scrollbar(devframe, orient="vertical", command=self.modulelist.yview)
+        scroll.pack(side='right', fill='y')
+
+        self.modulelist.configure(yscrollcommand=scroll.set)
+
+        self.varDebug = Tkinter.IntVar()
+        self.checkDebug =  ttk.Checkbutton(frame_scan, text="Режим отладки", variable=self.varDebug)
+        self.checkDebug.pack(side="top", pady=2, padx=2)
+
+        # Окно работы с выбранным устройством
+
+        frame_work = ttk.Frame(self.root, relief="groove", borderwidth=2)
+        frame_work.pack(side="left", fill="both", ipady=2, ipadx=2, pady=2, padx=2, expand=True)
+
+        self.varConn = Tkinter.IntVar()
+        self.checkConn = Tkinter.Checkbutton(frame_work, text="Связь", variable=self.varConn)
+        self.checkConn.pack(side="top", pady=2)
+        CreateToolTip(self.checkConn, '''Статус связи с модулем:\n'''
+                                      '''Красный - связи нет\n'''
+                                      '''Зеленый - связь есть''')
+
+        stateframe = ttk.LabelFrame(frame_work, text="Состояние входных регистров", labelanchor='n')
+        stateframe.pack(side="top", fill="x", pady=2, padx=2, expand=True)
+
+        self.varSTEP = Tkinter.IntVar()
+        self.checkSTEP = Tkinter.Checkbutton(stateframe, text="STEP", variable=self.varSTEP)
+        self.checkSTEP.pack(side="left", fill="x", pady=2, padx=2, expand=True)
+        CreateToolTip(self.checkSTEP, '''Регистр STEP''')
+
+        self.varEN = Tkinter.IntVar()
+        self.checkEN = Tkinter.Checkbutton(stateframe, text="EN", variable=self.varEN)
+        self.checkEN.pack(side="left", fill="x", pady=2, padx=2, expand=True)
+        CreateToolTip(self.checkEN, '''Регистр EN''')
+
+        self.varDIR = Tkinter.IntVar()
+        self.checkDIR = Tkinter.Checkbutton(stateframe, text="DIR", variable=self.varDIR)
+        self.checkDIR.pack(side="left", fill="x", pady=2, padx=2, expand=True)
+        CreateToolTip(self.checkDIR, '''Регистр DIR''')
+
+        self.varIN2 = Tkinter.IntVar()
+        self.checkIN2 = Tkinter.Checkbutton(stateframe, text="IN2", variable=self.varIN2)
+        self.checkIN2.pack(side="left", fill="x", pady=2, padx=2, expand=True)
+        CreateToolTip(self.checkIN2, '''Регистр IN2''')
+
+        self.varIN1 = Tkinter.IntVar()
+        self.checkIN1 = Tkinter.Checkbutton(stateframe, text="IN1", variable=self.varIN1)
+        self.checkIN1.pack(side="left", fill="x", pady=2, padx=2, expand=True)
+        CreateToolTip(self.checkIN1, '''Регистр IN1''')
+
+        self.varHOME = Tkinter.IntVar()
+        self.checkHOME = Tkinter.Checkbutton(stateframe, text="HOME", variable=self.varHOME)
+        self.checkHOME.pack(side="left", fill="x", pady=2, padx=2, expand=True)
+        CreateToolTip(self.checkHOME, '''Регистр HOME''')
+
+        moveframe = ttk.LabelFrame(frame_work, text="Параметры движения", labelanchor='n')
+        moveframe.pack(side="top", fill="x", pady=2, padx=2, expand=True)
+
+        buttonMove = ttk.Button(moveframe, text="Начать движение", command=self.Button_Move)
+        buttonMove.pack(side="bottom", fill="x", pady=2, expand=True)
+        CreateToolTip(buttonMove, '''Начать движение с заданными параметрами''')
+
+        self.varCheckSpeed = Tkinter.IntVar()
+        speedcheck = ttk.Checkbutton(moveframe, text="Скорость", variable=self.varCheckSpeed)
+        CreateToolTip(speedcheck, '''Использовать параметр "Скорость"''')
+
+        speedframe = ttk.LabelFrame(moveframe, labelwidget=speedcheck, labelanchor='n')
+        speedframe.pack(side='left', fill='both', padx=2, expand=True)
+
+        self.spinSpeed = Tkinter.Spinbox(speedframe, state="disabled", justify="center", from_=-1000, to=1000, width=10)
+        self.spinSpeed.pack(side='top')
+        CreateToolTip(self.spinSpeed, '''Значение скорости''')
+
+        speedcheck.config(command=lambda: self.on_cb_toggled(self.spinSpeed, self.varCheckSpeed))
+
+        self.varCheckSteps = Tkinter.IntVar()
+        stepcheck = ttk.Checkbutton(moveframe, text="Шаги", variable=self.varCheckSteps)
+        CreateToolTip(stepcheck, '''Использовать параметр "Шаги"''')
+
+        stepframe = ttk.LabelFrame(moveframe, labelwidget=stepcheck, labelanchor='n')
+        stepframe.pack(side='left', fill='both', padx=2, expand=True)
+
+        self.spinSteps = Tkinter.Spinbox(stepframe, state="disabled", justify="center", from_=1, to=1000, width=10)
+        self.spinSteps.pack(side='top')
+        CreateToolTip(self.spinSteps, '''Значение шагов''')
+
+        stepcheck.config(command=lambda: self.on_cb_toggled(self.spinSteps, self.varCheckSteps))
+
+        self.varCheckEdge = Tkinter.IntVar()
+        edgecheck = ttk.Checkbutton(moveframe, text="Ограничения", variable=self.varCheckEdge)
+        CreateToolTip(edgecheck, '''Использовать параметр "Ограничения"''')
+
+        edgeframe = ttk.LabelFrame(moveframe, labelwidget=edgecheck, labelanchor='n')
+        edgeframe.pack(side='left', fill='both', padx=2, expand=True)
+
+        edges = ("STEP", "DIR", "IN1", "IN2", "HOME")
+        self.varEdge = Tkinter.StringVar()
+        self.varEdge.set(edges[0])
+        comboEdge = ttk.Combobox(edgeframe, textvariable=self.varEdge, values=edges, state='disabled', justify='center')
+        comboEdge.pack(side='top')
+        CreateToolTip(comboEdge, '''Значение ограничения''')
+
+        edgecheck.config(command=lambda: self.on_cb2_toggled(comboEdge, self.varCheckEdge))
+
+        cfgframe = ttk.LabelFrame(frame_work, text="Конфигурирование", labelanchor='n')
+        cfgframe.pack(side="top", fill="x", pady=2, padx=2, expand=True)
+
+        frame = ttk.Frame(cfgframe)
+        frame.pack(side="bottom", fill="both", ipady=2, ipadx=2, pady=2, padx=2, expand=True)
+
+        self.btnReset = ttk.Button(frame, text="Перезагрузка", command=self.Button_Reset)
+        self.btnReset.pack(side='left', fill='x', padx=2, expand=True)
+        CreateToolTip(self.btnReset, '''Восстановить настройки по-умолчанию''')
+
+        self.btnSave = ttk.Button(frame, text="Сохранить", command=self.Button_Save)
+        self.btnSave.pack(side='left', fill='x', padx=2, expand=True)
+        CreateToolTip(self.btnSave, '''Сохранить настройки в ПЗУ OSM''')
+
+        self.varCode = Tkinter.StringVar()
+        self.comboCode = ttk.Combobox(cfgframe, textvariable=self.varCode, values=None, state='readonly', justify='center')
+        self.comboCode.pack(side='left', fill='x', padx=2, expand=True)
+        self.comboCode.bind('<<ComboboxSelected>>', lambda event: self.Code_Selected(event))
+        CreateToolTip(self.comboCode, '''Код параметра модуля OSM''')
+
+        self.varCurVal = Tkinter.StringVar()
+        self.entryCurValue = ttk.Entry(cfgframe, textvariable=self.varCurVal, state='readonly', width=15, justify="center")
+        self.entryCurValue.pack(side='left', fill='x', padx=2)
+        CreateToolTip(self.entryCurValue, '''Текущее значение параметра''')
+
+        self.spinNewParam = Tkinter.Spinbox(cfgframe, justify="center", from_=0, to=0, width=15)
+        self.spinNewParam.pack(side='left', fill='x', padx=2)
+        CreateToolTip(self.spinNewParam, '''Новое значение параметра''')
+
+        self.btnWrite = ttk.Button(cfgframe, state="disabled", text="Записать", command=self.Button_Config)
+        self.btnWrite.pack(side='left', fill='x', padx=2)
+        CreateToolTip(self.btnWrite, '''Записать настройки в модуль OSM''')
+
+        print ("Start Module GUI ...")
+        self.root.mainloop()
+
+    def __del__(self):
+        if self.transport: del self.transport
+        if self.id_osm: del self.id_osm
+
+    def on_cb_toggled(self, widget, var):
+        widget.config(state="normal" if var.get() else "disabled")
+
+    def on_cb2_toggled(self, widget, var):
+        widget.config(state="readonly" if var.get() else "disabled")
+
+    def Code_Selected(self, event=None):
+        index = self.comboCode.current()
+
+        if index != -1:
+            self.btnWrite.config(state="normal")
+
+            self.spinNewParam.config(from_=OSM17[self.varCode.get()]['min'], to=OSM17[self.varCode.get()]['max'])
+            self.varCurVal.set(self.id_osm.getParam(self.varCode.get()))
+
+    def Button_Save(self):
+        self.id_osm.setParam("Command", CMD_SAVE_PARAMETERS)
+
+    def Button_Reset(self):
+        self.id_osm.reset()
+
+    def Button_Config(self):
+        self.id_osm.setParam(self.varCode.get(), int(self.spinNewParam.get()))
+
+    def Tick(self):
+        self.tick_task = self.root.after(500, self.Tick)
+
+        try:
+            state = self.id_osm.state()
+            self.varSTEP.set(state['STEP'])
+            self.varEN.set(state['EN'])
+            self.varDIR.set(state['DIR'])
+            self.varIN2.set(state['IN2'])
+            self.varIN1.set(state['IN1'])
+            self.varHOME.set(state['HOME'])
+        except Exception as err:
+            _logger.debug("{}".format(err))
+
+            state = None
+            self.varSTEP.set(False)
+            self.varEN.set(False)
+            self.varDIR.set(False)
+            self.varIN2.set(False)
+            self.varIN1.set(False)
+            self.varHOME.set(False)
+
+        self.varConn.set(int(bool(state)))
+        color = 'green' if self.varConn.get() else 'red'
+        self.checkConn.config(bg=color)
+
+    def Button_Move(self):
+        speed = int(self.spinSpeed.get()) if self.varCheckSpeed.get() else None
+        steps = int(self.spinSteps.get()) if self.varCheckSteps.get() else None
+        edge  = self.varEdge.get() if self.varCheckEdge.get() else None
+        self.id_osm.move(speed, steps, edge)
+
+    def Port_Selected(self, event=None):
+        if len(self.port_iid) > 0:
+            self.buttonScan.config(state="normal")
+
+    def Module_Selected(self, event=None):
+        selected_unit = selected_baudrate = None
+
+        for item in self.modulelist.selection():
+            selected_unit, selected_baudrate = self.modulelist.item(item, "values")
+            selected_unit = int(selected_unit)
+            selected_baudrate = int(selected_baudrate)
+
+        print ("Selected module {} with baudrate {} at port {}".
+                format(selected_unit, selected_baudrate, selected_port))
+
+        if self.transport:
+            del self.transport
+            self.transport = None
+        if self.id_osm:
+            del self.id_osm
+            self.id_osm = None
+
+        loglevel = logging.DEBUG if self.varDebug.get() else logging.INFO
+        _logger.setLevel(loglevel)
+
+        self.transport = ModbusSerialClient(method='rtu', port=selected_port,
+                                            baudrate=selected_baudrate,
+                                            timeout=self.varTimeout.get())
+        self.id_osm = Client(transport=self.transport, device=OSM17, unit=selected_unit)
+
+        self.comboCode.config(values=sorted(OSM17.keys()))
+
+        if self.task:
+            self.root.after_cancel(self.task)
+            self.root.after_cancel(self.tick_task)
+
+        self.task = self.root.after_idle(self.Tick)
+
+    def Button_Scan(self):
+        if self.task:
+            self.root.after_cancel(self.task)
+            self.root.after_cancel(self.tick_task)
+
+        self.checkConn.config(bg='red')
+
+        self.varConn.set(False)
+        self.varSTEP.set(False)
+        self.varEN.set(False)
+        self.varDIR.set(False)
+        self.varIN2.set(False)
+        self.varIN1.set(False)
+        self.varHOME.set(False)
+
+        if self.transport:
+            del self.transport
+            self.transport = None
+        if self.id_osm:
+            del self.id_osm
+            self.id_osm = None
+
+        self.buttonScan.pack_forget()
+        self.progressbar.pack(side="top", fill="x", pady=2)
+
+        for iid in self.module_iid:
+            self.modulelist.delete(iid)
+        del self.module_iid[:]
+
+        self.modulelist.update()
+
+        global selected_port
+
+        for item in self.portlist.selection():
+            selected_port = self.portlist.item(item, "values")[0]
+
+        print ("Start scanning port {}".format(selected_port))
+
+        loglevel = logging.DEBUG if self.varDebug.get() else 100
+        _logger.setLevel(loglevel)
+
+        for baudrate in (57600, 115200, 1200, 2400, 4800, 9600, 19200, 38400):
+            transport = ModbusSerialClient(method='rtu', port=selected_port,
+                                           baudrate=baudrate,
+                                           timeout=self.varTimeout.get())
+            for unit in range(1, 33):
+                osm = Client(transport=transport, device=OSM17, unit=unit)
+                try:
+                    if osm.state():
+                        iid = self.modulelist.insert("" , "end", values=(unit, baudrate))
+                        self.module_iid.append(iid)
+                        time.sleep(self.varTimeout.get())
+                except:
+                    pass
+
+                self.root.update()
+                self.progressbar.step(1)
+
+        print ("Stop scanning port {}".format(selected_port))
+
+        self.progressbar.pack_forget()
+        self.buttonScan.pack(side="top", fill="x", pady=2)
+
+
+if __name__ == "__main__":
+    OsmGui()
+    print ("Done")

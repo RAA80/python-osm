@@ -1,0 +1,90 @@
+#! /usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import logging
+import argparse
+import time
+from pymodbus.client.sync import ModbusSerialClient
+from osm.client import Client
+from osm.device import OSM17
+
+_keys = sorted(OSM17.keys())
+
+
+def Process(args):
+    _timeout = args.timeout if args.timeout is not None else 0.2
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG)
+
+    if args.scan:
+        for baudrate in (57600, 115200, 1200, 2400, 4800, 9600, 19200, 38400):
+            transport = ModbusSerialClient(method='rtu', port=args.port,
+                                           baudrate=baudrate, timeout=_timeout)
+            for unit in range(1, 33):
+                id_osm = Client(transport=transport, device=OSM17, unit=unit)
+                try:
+                    if id_osm.state():
+                        print ("Unit: {}, Baudrate: {} - OK".format(unit, baudrate))
+                        time.sleep(_timeout)
+                except:
+                    pass
+    else:
+        transport = ModbusSerialClient(method='rtu', port=args.port,
+                                       baudrate=args.baudrate, timeout=_timeout,
+                                       retry_on_empty=True)
+        id_osm = Client(transport=transport, device=OSM17, unit=args.unit)
+
+        if args.state:
+            print (id_osm.state())
+        elif args.reset:
+            print (id_osm.reset())
+        elif args.get:
+            print ("{} = {}".format(args.get[0], id_osm.getParam(args.get[0])))
+        elif args.set:
+            print (id_osm.setParam(args.set[0], int(args.set[1])))
+        elif args.move:
+            try:
+                speed = int(args.move[0])
+            except:
+                speed = None
+
+            try:
+                steps = int(args.move[1])
+            except:
+                steps = None
+
+            try:
+                edge = args.move[2]
+            except:
+                edge = None
+
+            print (id_osm.move(speed, steps, edge))
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='OSM stepper driver controller command-line option')
+
+    parser.add_argument('--port', type=str, nargs='?', const='COM1', required=True, help='Set used port name')
+    parser.add_argument('--timeout', type=float, nargs='?', metavar=('VALUE'), const=0.2, help='Set used timeout in second')
+    parser.add_argument('--debug', action='store_true', help='Print debug information')
+
+    group1 = parser.add_argument_group('Scanner')
+    group1.add_argument('--scan', action='store_true', help='Scan available modules')
+
+    group2 = parser.add_argument_group('User')
+    group2.add_argument('--baudrate', type=int, nargs='?', metavar=('RATE'), const=57600, help='Set used OSM baudrate')
+    group2.add_argument('--unit', type=int, nargs='?', const=1, help='Set used OSM address')
+
+    group2_ex = group2.add_mutually_exclusive_group()
+    group2_ex.add_argument('--reset', action='store_true', help='Send RESET request')
+    group2_ex.add_argument('--state', action='store_true', help='Read OSM state')
+    group2_ex.add_argument('--get', type=str, nargs=1, metavar=('KEY'), choices=_keys,
+                                    help='Read config value. Possible KEY values: ' + str(_keys))
+    group2_ex.add_argument('--set', type=str, nargs=2, metavar=('KEY', 'VALUE'),
+                                    help='Write config value. See --get for possible KEY values')
+    group2_ex.add_argument('--move', type=str, nargs="*", metavar=('ARG'), help='Send move command with args: Speed, Steps, Edge')
+
+    parser.set_defaults(func=Process)
+
+    args = parser.parse_args()
+    args.func(args)
