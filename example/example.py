@@ -13,22 +13,23 @@ logging.basicConfig(level=logging.INFO)
 
 transport = ModbusSerialClient(method='rtu',
                                port="COM5",
-                               baudrate=57600,         # В pymodbus по-умолчанию параметры порта 19200-8-N-1
+                               baudrate=115200,
                                timeout=0.2,
-                               retry_on_empty=True)    # ОБЯЗАТЕЛЬНО при использовании нескольких устройств
+                               retry_on_empty=True)
 id_osm = Client(transport=transport, device=OSM17, unit=1)
-print (id_osm)
+print(id_osm)
 
-print ("State: {}".format(id_osm.state()))
-print ("Set Enable: {}".format(id_osm.setParam("Enable", 1)))
-print ("Set Current: {}".format(id_osm.setParam("Current", 100)))
-print ("Get Enable: {}".format(id_osm.getParam("Enable")))
-print ("Get Current: {}".format(id_osm.getParam("Current")))
-print ("Move: {}".format(id_osm.move(speed=100, steps=200, edge="IN1")))
+print("State: {}".format(id_osm.state()))
+print("Set Enable: {}".format(id_osm.setParam("Enable", 1)))
+print("Get Enable: {}".format(id_osm.getParam("Enable")))
+print("Set Current: {}".format(id_osm.setParam("Current", 100)))
+print("Get Current: {}".format(id_osm.getParam("Current")))
+
+print("Move: {}".format(id_osm.move(speed=100, steps=200, edge="IN1")))
 
 sleep(5)
 
-print ("Set Current: {}".format(id_osm.setParam("Current", 0)))
-print ("Set Enable: {}".format(id_osm.setParam("Enable", 0)))
+print("Set Current: {}".format(id_osm.setParam("Current", 0)))
+print("Set Enable: {}".format(id_osm.setParam("Enable", 0)))
 
-#print ("Reset: {}".format(id_osm.reset()))
+#print("Reset: {}".format(id_osm.reset()))

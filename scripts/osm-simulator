@@ -14,39 +14,43 @@ from pymodbus.transaction import ModbusRtuFramer
 
 
 def Process(args):
-    store = ModbusSlaveContext(ModbusSparseDataBlock.create())
-    context = ModbusServerContext(slaves=store, single=True)
+    store = {i: ModbusSlaveContext(ModbusSparseDataBlock.create()) for i in range(32)}
+    context = ModbusServerContext(slaves=store, single=False)
+    for i in range(32):
+        context[i].setValues(fx=3, address=0, values=[1])
+        context[i].setValues(fx=3, address=1, values=[6])
+        context[i].setValues(fx=3, address=2, values=[25])
+        context[i].setValues(fx=3, address=3, values=[0])
+        context[i].setValues(fx=3, address=4, values=[0])
+        context[i].setValues(fx=3, address=5, values=[0])
+        context[i].setValues(fx=3, address=6, values=[0])
+        context[i].setValues(fx=3, address=7, values=[1])
+        context[i].setValues(fx=3, address=8, values=[63])
+        context[i].setValues(fx=3, address=9, values=[50])
+        context[i].setValues(fx=3, address=10, values=[0])
+        context[i].setValues(fx=3, address=11, values=[0])
+        context[i].setValues(fx=3, address=12, values=[10])
 
-    context[0].setValues(fx=3, address=0, values=[1])
-    context[0].setValues(fx=3, address=1, values=[6])
-    context[0].setValues(fx=3, address=2, values=[25])
-    context[0].setValues(fx=3, address=3, values=[0])
-    context[0].setValues(fx=3, address=4, values=[0])
-    context[0].setValues(fx=3, address=5, values=[0])
-    context[0].setValues(fx=3, address=6, values=[0])
-    context[0].setValues(fx=3, address=7, values=[1])
-    context[0].setValues(fx=3, address=8, values=[63])
-    context[0].setValues(fx=3, address=9, values=[50])
-    context[0].setValues(fx=3, address=10, values=[0])
-    context[0].setValues(fx=3, address=11, values=[0])
-    context[0].setValues(fx=3, address=12, values=[10])
+        context[i].setValues(fx=3, address=16384, values=[4])
+        context[i].setValues(fx=3, address=16385, values=[0])
+        context[i].setValues(fx=3, address=16386, values=[0])
+        context[i].setValues(fx=3, address=16387, values=[0])
+        context[i].setValues(fx=3, address=16388, values=[0])
+        context[i].setValues(fx=3, address=16389, values=[0])
+        context[i].setValues(fx=3, address=16390, values=[0])
+        context[i].setValues(fx=3, address=16391, values=[0])
+        context[i].setValues(fx=3, address=16392, values=[2000])
+        context[i].setValues(fx=3, address=16393, values=[0])
 
-    context[0].setValues(fx=3, address=16384, values=[4])
-    context[0].setValues(fx=3, address=16385, values=[0])
-    context[0].setValues(fx=3, address=16386, values=[0])
-    context[0].setValues(fx=3, address=16387, values=[0])
-    context[0].setValues(fx=3, address=16388, values=[0])
-    context[0].setValues(fx=3, address=16389, values=[0])
-    context[0].setValues(fx=3, address=16390, values=[0])
-    context[0].setValues(fx=3, address=16391, values=[0])
-    context[0].setValues(fx=3, address=16392, values=[2000])
-    context[0].setValues(fx=3, address=16393, values=[0])
+        context[i].setValues(fx=3, address=32768, values=[0,0])
+        context[i].setValues(fx=3, address=32770, values=[0,0])
+        context[i].setValues(fx=3, address=32772, values=[0,0])
+        context[i].setValues(fx=3, address=32776, values=[0,0])
+        context[i].setValues(fx=3, address=32778, values=[0,0])
 
-    context[0].setValues(fx=3, address=32768, values=[0,0])
-    context[0].setValues(fx=3, address=32770, values=[0,0])
-    context[0].setValues(fx=3, address=32772, values=[0,0])
-    context[0].setValues(fx=3, address=32776, values=[0,0])
-    context[0].setValues(fx=3, address=32778, values=[0,0])
+        thr = threading.Thread(target=Worker, args=(context[i],))
+        thr.daemon = True
+        thr.start()
 
     # initialize the server information
     identity = ModbusDeviceIdentification()
@@ -57,9 +61,6 @@ def Process(args):
     identity.ModelName = 'OSM Simulator'
     identity.MajorMinorRevision = '0.1.0'
 
-    thr = threading.Thread(target=Worker, args=(context,))
-    thr.daemon = True
-    thr.start()
 
     try:
         if args.tcp:
@@ -68,7 +69,7 @@ def Process(args):
             StartUdpServer(context, identity=identity, address=("localhost", 5020))
         elif args.serial:
             StartSerialServer(context, framer=ModbusRtuFramer, identity=identity,
-                              port=args.serial[0], timeout=0.005, baudrate=57600)
+                              port=args.serial[0], timeout=0.01, baudrate=57600)
     except KeyboardInterrupt:
         exit(0)
 
@@ -77,34 +78,34 @@ def Worker(context):
     timer = 0
 
     while True:
-        Address         = context[0].getValues(fx=3, address=0)[0]
-        BaudRateIndex   = context[0].getValues(fx=3, address=1)[0]
-        RtsDelay        = context[0].getValues(fx=3, address=2)[0]
-        Enable          = context[0].getValues(fx=3, address=3)[0]
-        Direction       = context[0].getValues(fx=3, address=4)[0]
-        Command         = context[0].getValues(fx=3, address=5)[0]
-        Output          = context[0].getValues(fx=3, address=6)[0]
-        Microstep       = context[0].getValues(fx=3, address=7)[0]
-        Inputs          = context[0].getValues(fx=3, address=8)[0]
-        SleepCurrent    = context[0].getValues(fx=3, address=9)[0]
-        IntEn           = context[0].getValues(fx=3, address=10)[0]
-        IntMode         = context[0].getValues(fx=3, address=11)[0]
-        SystemId        = context[0].getValues(fx=3, address=12)[0]
-        UartDelay       = context[0].getValues(fx=3, address=16384)[0]
-        Speed           = context[0].getValues(fx=3, address=16385)[0]
-        StartSpeed      = context[0].getValues(fx=3, address=16386)[0]
-        Accel           = context[0].getValues(fx=3, address=16387)[0]
-        EndSpeed        = context[0].getValues(fx=3, address=16388)[0]
-        Current         = context[0].getValues(fx=3, address=16389)[0]
-        SpeedCurrent    = context[0].getValues(fx=3, address=16390)[0]
-        StepsBefDecel   = context[0].getValues(fx=3, address=16391)[0]
-        SleepTime       = context[0].getValues(fx=3, address=16392)[0]
-        EnCounter       = context[0].getValues(fx=3, address=16393)[0]
-        StepsNumber     = context[0].getValues(fx=3, address=32768, count=2)
-        Position        = context[0].getValues(fx=3, address=32770, count=2)
-        StepsCounter    = context[0].getValues(fx=3, address=32772, count=2)
-        IntCounter      = context[0].getValues(fx=3, address=32776, count=2)
-        EncoderPosition = context[0].getValues(fx=3, address=32778, count=2)
+        Address         = context.getValues(fx=3, address=0)[0]
+        BaudRateIndex   = context.getValues(fx=3, address=1)[0]
+        RtsDelay        = context.getValues(fx=3, address=2)[0]
+        Enable          = context.getValues(fx=3, address=3)[0]
+        Direction       = context.getValues(fx=3, address=4)[0]
+        Command         = context.getValues(fx=3, address=5)[0]
+        Output          = context.getValues(fx=3, address=6)[0]
+        Microstep       = context.getValues(fx=3, address=7)[0]
+        Inputs          = context.getValues(fx=3, address=8)[0]
+        SleepCurrent    = context.getValues(fx=3, address=9)[0]
+        IntEn           = context.getValues(fx=3, address=10)[0]
+        IntMode         = context.getValues(fx=3, address=11)[0]
+        SystemId        = context.getValues(fx=3, address=12)[0]
+        UartDelay       = context.getValues(fx=3, address=16384)[0]
+        Speed           = context.getValues(fx=3, address=16385)[0]
+        StartSpeed      = context.getValues(fx=3, address=16386)[0]
+        Accel           = context.getValues(fx=3, address=16387)[0]
+        EndSpeed        = context.getValues(fx=3, address=16388)[0]
+        Current         = context.getValues(fx=3, address=16389)[0]
+        SpeedCurrent    = context.getValues(fx=3, address=16390)[0]
+        StepsBefDecel   = context.getValues(fx=3, address=16391)[0]
+        SleepTime       = context.getValues(fx=3, address=16392)[0]
+        EnCounter       = context.getValues(fx=3, address=16393)[0]
+        StepsNumber     = context.getValues(fx=3, address=32768, count=2)
+        Position        = context.getValues(fx=3, address=32770, count=2)
+        StepsCounter    = context.getValues(fx=3, address=32772, count=2)
+        IntCounter      = context.getValues(fx=3, address=32776, count=2)
+        EncoderPosition = context.getValues(fx=3, address=32778, count=2)
 
         StepsNumber = (StepsNumber[0] << 16) + StepsNumber[1]
         Position =  (Position[0] << 16) + Position[1]
@@ -115,7 +116,7 @@ def Worker(context):
         if Enable:
             if Command == 0x00:
                 # Остановка двигателя
-                context[0].setValues(fx=3, address=16385, values=[0])
+                context.setValues(fx=3, address=16385, values=[0])
                 changeSpeedCurrent(context, 0)
 
             elif Command == 0x01:
@@ -128,8 +129,8 @@ def Worker(context):
                 StepsCounter = changeStepsCounter(context, StepsNumber, StepsCounter, Speed, Microstep)
 
                 if StepsCounter <= 0:
-                    context[0].setValues(fx=3, address=32772, values=[0,0])
-                    context[0].setValues(fx=3, address=5, values=[0])
+                    context.setValues(fx=3, address=32772, values=[0,0])
+                    context.setValues(fx=3, address=5, values=[0])
 
                 changeSpeedCurrent(context, Speed)
                 changePosition(context, Position, Direction, Speed, Microstep)
@@ -183,8 +184,8 @@ def Worker(context):
 
             elif Command == 0x0C:
                 # Перезагрузка контроллера. Все параметры сбрасываются, движение прекращается
-                context[0].setValues(fx=3, address=8, values=[63])
-                context[0].setValues(fx=3, address=5, values=[0])
+                context.setValues(fx=3, address=8, values=[63])
+                context.setValues(fx=3, address=5, values=[0])
 
             elif Command == 0x0D:
                 # Движение до срабатывания датчика, подключенного ко входу In1,
@@ -237,11 +238,11 @@ def Worker(context):
             else:
                 print ("Unknown command. Ignoring")
 
-        print ("Command = {:2d}, Speed = {:5d}, SpeedCurrent = {:5d}, "
-               "Microstep = {:2d}, Position = {:10d}, Direction = {:1d}, "
-               "StepsNumber = {:10d}, StepsCounter = {:10d}, Inputs = {:2d}".
-               format(Command, Speed, SpeedCurrent, Microstep, Position,
-                      Direction, StepsNumber, StepsCounter, Inputs), end="\r")
+        #print ("Command = {:2d}, Speed = {:5d}, SpeedCurrent = {:5d}, "
+        #       "Microstep = {:2d}, Position = {:10d}, Direction = {:1d}, "
+        #       "StepsNumber = {:10d}, StepsCounter = {:10d}, Inputs = {:2d}".
+        #       format(Command, Speed, SpeedCurrent, Microstep, Position,
+        #              Direction, StepsNumber, StepsCounter, Inputs), end="\r")
 
         time.sleep(1.0)
 
@@ -255,13 +256,13 @@ def changePosition(context, Position, Direction, Speed, Microstep):
     Position_High = (Position & 0xFFFF0000) >> 16
     Position_Low  = Position & 0x0000FFFF
 
-    context[0].setValues(fx=3, address=32770, values=[Position_High, Position_Low])
+    context.setValues(fx=3, address=32770, values=[Position_High, Position_Low])
 
     return context
 
 
 def changeSpeedCurrent(context, Speed):
-    context[0].setValues(fx=3, address=16390, values=[Speed])
+    context.setValues(fx=3, address=16390, values=[Speed])
 
     return context
 
@@ -270,8 +271,8 @@ def moveIntoEdge(context, timer, Inputs, bits):
     timer += 1
     if timer >= 5:
         timer = 0
-        context[0].setValues(fx=3, address=8, values=[Inputs & bits])
-        context[0].setValues(fx=3, address=5, values=[0])
+        context.setValues(fx=3, address=8, values=[Inputs & bits])
+        context.setValues(fx=3, address=5, values=[0])
 
     return timer
 
@@ -280,11 +281,11 @@ def moveIntoEdgeWithSteps(context, timer, Inputs, StepsCounter, bits):
     timer = moveIntoEdge(context, timer, Inputs, bits)
 
     if timer == 0:
-        context[0].setValues(fx=3, address=32772, values=[0,0])
+        context.setValues(fx=3, address=32772, values=[0,0])
     elif StepsCounter <= 0:
         timer = 0
-        context[0].setValues(fx=3, address=32772, values=[0,0])
-        context[0].setValues(fx=3, address=5, values=[0])
+        context.setValues(fx=3, address=32772, values=[0,0])
+        context.setValues(fx=3, address=5, values=[0])
 
     return timer
 
@@ -294,7 +295,7 @@ def changeStepsCounter(context, StepsNumber, StepsCounter, Speed, Microstep):
     StepsCounter_High = (StepsCounter & 0xFFFF0000) >> 16
     StepsCounter_Low  = StepsCounter & 0x0000FFFF
 
-    context[0].setValues(fx=3, address=32772, values=[StepsCounter_High, StepsCounter_Low])
+    context.setValues(fx=3, address=32772, values=[StepsCounter_High, StepsCounter_Low])
 
     StepsCounter = StepsNumber - StepsCounter
     return StepsCounter

@@ -4,7 +4,6 @@
 import logging
 from pymodbus.payload import BinaryPayloadDecoder, BinaryPayloadBuilder
 from pymodbus.constants import Endian
-from pymodbus.version import version
 from pymodbus.exceptions import ModbusException
 from pymodbus.pdu import ExceptionResponse
 
@@ -50,67 +49,55 @@ class Client(object):
             self._socket.close()
 
     def __repr__(self):
-        return ("Client(transport={}, unit={})".format(self._socket, self.unit))
+        return "Client(transport={}, unit={})".format(self._socket, self.unit)
 
     def _errorCheck(self, name, retcode):
         if not retcode:         # for python2 and pymodbus v1.3.0
-            _logger.error("Unit {} called '{}' with error: "
+            _logger.error("Unit %d called '%s' with error: "
                           "Modbus Error: [Input/Output] No Response received "
-                          "from the remote unit".format(self.unit, name))
+                          "from the remote unit", self.unit, name)
         elif isinstance(retcode, (ModbusException, ExceptionResponse)):
-            _logger.error("Unit {} called '{}' with error: {}".
-                           format(self.unit, name, retcode))
+            _logger.error("Unit %d called '%s' with error: %s", self.unit, name, retcode)
         else:
             return True
 
     def getParam(self, name):
         ''' Чтение значения параметра по заданному имени '''
 
-        self._dev = self.device[name]
+        _dev = self.device[name]
 
-        if self._dev['type'] in ["I32", "U32"]: count = 2
-        elif self._dev['type'] in ["U16", "U8"]: count = 1
+        if _dev['type'] in ["I32", "U32"]: count = 2
+        elif _dev['type'] in ["U16", "U8"]: count = 1
 
-        result = self._socket.read_holding_registers(address=self._dev['address'],
+        result = self._socket.read_holding_registers(address=_dev['address'],
                                                      count=count,
                                                      unit=self.unit)
         if self._errorCheck(name, result):
-            if int(version.short()[0]) > 1:
-                decoder = BinaryPayloadDecoder.fromRegisters(registers=result.registers,
-                                                             byteorder=Endian.Big,
-                                                             wordorder=Endian.Big)
-            else:
-                decoder = BinaryPayloadDecoder.fromRegisters(registers=result.registers,
-                                                             endian=Endian.Big)
-            if self._dev['type'] == "I32":   return decoder.decode_32bit_int()
-            elif self._dev['type'] == "U32": return decoder.decode_32bit_uint()
-            elif self._dev['type'] == "U16": return decoder.decode_16bit_uint()
-            elif self._dev['type'] == "U8":  return decoder.decode_16bit_uint()
+            decoder = BinaryPayloadDecoder.fromRegisters(result.registers, Endian.Big)
+
+            if _dev['type'] == "I32":   return decoder.decode_32bit_int()
+            elif _dev['type'] == "U32": return decoder.decode_32bit_uint()
+            elif _dev['type'] == "U16": return decoder.decode_16bit_uint()
+            elif _dev['type'] == "U8":  return decoder.decode_16bit_uint()
 
     def setParam(self, name, value):
         ''' Запись значения параметра по заданному имени '''
 
-        self._dev = self.device[name]
+        _dev = self.device[name]
 
-        if value < self._dev['min'] or value > self._dev['max']:
-            raise ValueError("Parameter {} out of range ({}, {})".
-                            format(name, self._dev['min'], self._dev['max']))
+        if value < _dev['min'] or value > _dev['max']:
+            raise ValueError("Parameter '{}' out of range ({}, {}) value '{}'".
+                             format(name, _dev['min'], _dev['max'], value))
 
-        if int(version.short()[0]) > 1:
-            builder = BinaryPayloadBuilder(byteorder=Endian.Big,
-                                           wordorder=Endian.Big)
-        else:
-            builder = BinaryPayloadBuilder(endian=Endian.Big)
+        builder = BinaryPayloadBuilder(None, Endian.Big)
 
-        if self._dev['type'] == "I32":   builder.add_32bit_int(value)
-        elif self._dev['type'] == "U32": builder.add_32bit_uint(value)
-        elif self._dev['type'] == "U16": builder.add_16bit_uint(value)
-        elif self._dev['type'] == "U8":  builder.add_16bit_uint(value)
+        if _dev['type'] == "I32":   builder.add_32bit_int(value)
+        elif _dev['type'] == "U32": builder.add_32bit_uint(value)
+        elif _dev['type'] == "U16": builder.add_16bit_uint(value)
+        elif _dev['type'] == "U8":  builder.add_16bit_uint(value)
 
-        payload = builder.build()
-
-        result = self._socket.write_registers(address=self._dev['address'],
-                                              values=payload,
+        result = self._socket.write_registers(address=_dev['address'],
+                                              values=builder.build(),
                                               skip_encode=True,
                                               unit=self.unit)
         return self._errorCheck(name, result)
