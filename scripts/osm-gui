@@ -28,7 +28,7 @@ else:
 try:
     import tkinter as Tkinter       # for Python3
     from tkinter import ttk
-except:
+except ImportError:
     import Tkinter                  # for Python2
     import ttk
 
@@ -69,7 +69,7 @@ class CreateToolTip(object):
             self.tw.destroy()
 
 
-class OsmGui():
+class OsmGui(object):
     def __init__(self):
         self.root = Tkinter.Tk()
         self.root.title("OSM GUI")
@@ -99,7 +99,7 @@ class OsmGui():
 
         iterator = sorted(comports())
         for n, (port, desc, hwid) in enumerate(iterator, 1):
-            iid = self.portlist.insert("" , "end", values=port)
+            iid = self.portlist.insert("", "end", values=port)
             self.port_iid.append(iid)
 
         port_scroll = ttk.Scrollbar(portframe, orient="vertical", command=self.portlist.yview)
@@ -123,7 +123,7 @@ class OsmGui():
         devframe = ttk.LabelFrame(frame_scan, text="Список активных модулей OSM", labelanchor='n')
         devframe.pack(side="top", fill="both", pady=2, padx=2, expand=True)
 
-        self.modulelist = ttk.Treeview(devframe, columns=("address","baudrate"), selectmode='browse', height=5, show="headings")
+        self.modulelist = ttk.Treeview(devframe, columns=("address", "baudrate"), selectmode='browse', height=5, show="headings")
         self.modulelist.column("address", width=100, anchor='center')
         self.modulelist.column("baudrate", width=100, anchor='center')
         self.modulelist.heading("address", text="Адрес")
@@ -137,7 +137,7 @@ class OsmGui():
         self.modulelist.configure(yscrollcommand=scroll.set)
 
         self.varDebug = Tkinter.IntVar()
-        self.checkDebug =  ttk.Checkbutton(frame_scan, text="Режим отладки", variable=self.varDebug)
+        self.checkDebug = ttk.Checkbutton(frame_scan, text="Режим отладки", variable=self.varDebug)
         self.checkDebug.pack(side="top", pady=2, padx=2)
 
         # Окно работы с выбранным устройством
@@ -267,7 +267,7 @@ class OsmGui():
         self.btnWrite.pack(side='left', fill='x', padx=2)
         CreateToolTip(self.btnWrite, '''Записать настройки в модуль OSM''')
 
-        print ("Start Module GUI ...")
+        print("Start Module GUI ...")
         self.root.mainloop()
 
     def __del__(self):
@@ -287,16 +287,16 @@ class OsmGui():
             self.btnWrite.config(state="normal")
 
             self.spinNewParam.config(from_=OSM17[self.varCode.get()]['min'], to=OSM17[self.varCode.get()]['max'])
-            self.varCurVal.set(self.id_osm.getParam(self.varCode.get()))
+            self.varCurVal.set(self.id_osm.get_param(self.varCode.get()))
 
     def Button_Save(self):
-        self.id_osm.setParam("Command", CMD_SAVE_PARAMETERS)
+        self.id_osm.set_param("Command", CMD_SAVE_PARAMETERS)
 
     def Button_Reset(self):
         self.id_osm.reset()
 
     def Button_Config(self):
-        self.id_osm.setParam(self.varCode.get(), int(self.spinNewParam.get()))
+        self.id_osm.set_param(self.varCode.get(), int(self.spinNewParam.get()))
 
     def Tick(self):
         self.tick_task = self.root.after(500, self.Tick)
@@ -310,7 +310,7 @@ class OsmGui():
             self.varIN1.set(state['IN1'])
             self.varHOME.set(state['HOME'])
         except Exception as err:
-            _logger.debug("{}".format(err))
+            _logger.debug("%s", err)
 
             state = None
             self.varSTEP.set(False)
@@ -342,7 +342,7 @@ class OsmGui():
             selected_unit = int(selected_unit)
             selected_baudrate = int(selected_baudrate)
 
-        print ("Selected module {} with baudrate {} at port {}".
+        print("Selected module {} with baudrate {} at port {}".
                 format(selected_unit, selected_baudrate, selected_port))
 
         if self.transport:
@@ -404,7 +404,7 @@ class OsmGui():
         for item in self.portlist.selection():
             selected_port = self.portlist.item(item, "values")[0]
 
-        print ("Start scanning port {}".format(selected_port))
+        print("Start scanning port {}".format(selected_port))
 
         loglevel = logging.DEBUG if self.varDebug.get() else 100
         _logger.setLevel(loglevel)
@@ -417,16 +417,16 @@ class OsmGui():
                 osm = Client(transport=transport, device=OSM17, unit=unit)
                 try:
                     if osm.state():
-                        iid = self.modulelist.insert("" , "end", values=(unit, baudrate))
+                        iid = self.modulelist.insert("", "end", values=(unit, baudrate))
                         self.module_iid.append(iid)
                         time.sleep(self.varTimeout.get())
-                except:
+                except Exception:
                     pass
 
                 self.root.update()
                 self.progressbar.step(1)
 
-        print ("Stop scanning port {}".format(selected_port))
+        print("Stop scanning port {}".format(selected_port))
 
         self.progressbar.pack_forget()
         self.buttonScan.pack(side="top", fill="x", pady=2)
@@ -434,4 +434,4 @@ class OsmGui():
 
 if __name__ == "__main__":
     OsmGui()
-    print ("Done")
+    print("Done")

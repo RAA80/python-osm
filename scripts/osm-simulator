@@ -56,11 +56,10 @@ def Process(args):
     identity = ModbusDeviceIdentification()
     identity.VendorName = 'OSM'
     identity.ProductCode = 'Simulator'
-    identity.VendorUrl = 'http://gitlab.main1325.ru/aaryadno/python-osm'
+    identity.VendorUrl = ''
     identity.ProductName = 'OSM Simulator'
     identity.ModelName = 'OSM Simulator'
     identity.MajorMinorRevision = '0.1.0'
-
 
     try:
         if args.tcp:
@@ -150,19 +149,19 @@ def Worker(context):
             elif Command == 0x05:
                 # Команда устанавливает текущее значение скорости в соответствии
                 # со значением напряжения на аналоговом входе
-                print ("Command not implemented. Maybe later")
+                print("Command not implemented. Maybe later")
 
             elif Command == 0x06:
                 # Системная команда
-                print ("Command not implemented. Maybe later")
+                print("Command not implemented. Maybe later")
 
             elif Command == 0x07:
                 # Системная команда
-                print ("Command not implemented. Maybe later")
+                print("Command not implemented. Maybe later")
 
             elif Command == 0x08:
                 # Реверс
-                print ("Command not implemented. Maybe later")
+                print("Command not implemented. Maybe later")
 
             elif Command == 0x09:
                 # Движение до срабатывания датчика, подключенного ко входу IN1
@@ -229,16 +228,16 @@ def Worker(context):
 
             elif Command == 0x12:
                 # Сделать один шаг
-                print ("Command not implemented. Maybe later")
+                print("Command not implemented. Maybe later")
 
             elif Command == 0x13:
                 # Сохранить параметры движения, микрошага и тока в энергонезависимую память
-                print ("Command not implemented. Maybe later")
+                print("Command not implemented. Maybe later")
 
             else:
-                print ("Unknown command. Ignoring")
+                print("Unknown command. Ignoring")
 
-        #print ("Command = {:2d}, Speed = {:5d}, SpeedCurrent = {:5d}, "
+        # print("Command = {:2d}, Speed = {:5d}, SpeedCurrent = {:5d}, "
         #       "Microstep = {:2d}, Position = {:10d}, Direction = {:1d}, "
         #       "StepsNumber = {:10d}, StepsCounter = {:10d}, Inputs = {:2d}".
         #       format(Command, Speed, SpeedCurrent, Microstep, Position,
@@ -297,8 +296,7 @@ def changeStepsCounter(context, StepsNumber, StepsCounter, Speed, Microstep):
 
     context.setValues(fx=3, address=32772, values=[StepsCounter_High, StepsCounter_Low])
 
-    StepsCounter = StepsNumber - StepsCounter
-    return StepsCounter
+    return StepsNumber - StepsCounter
 
 
 if __name__ == "__main__":

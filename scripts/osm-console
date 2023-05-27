@@ -24,9 +24,9 @@ def Process(args):
                 id_osm = Client(transport=transport, device=OSM17, unit=unit)
                 try:
                     if id_osm.state():
-                        print ("Unit: {}, Baudrate: {} - OK".format(unit, baudrate))
+                        print("Unit: {}, Baudrate: {} - OK".format(unit, baudrate))
                         time.sleep(_timeout)
-                except:
+                except Exception:
                     pass
     else:
         transport = ModbusSerialClient(method='rtu', port=args.port,
@@ -35,30 +35,30 @@ def Process(args):
         id_osm = Client(transport=transport, device=OSM17, unit=args.unit)
 
         if args.state:
-            print (id_osm.state())
+            print(id_osm.state())
         elif args.reset:
-            print (id_osm.reset())
+            print(id_osm.reset())
         elif args.get:
-            print ("{} = {}".format(args.get[0], id_osm.getParam(args.get[0])))
+            print("{} = {}".format(args.get[0], id_osm.get_param(args.get[0])))
         elif args.set:
-            print (id_osm.setParam(args.set[0], int(args.set[1])))
+            print(id_osm.set_param(args.set[0], int(args.set[1])))
         elif args.move:
             try:
                 speed = int(args.move[0])
-            except:
+            except TypeError:
                 speed = None
 
             try:
                 steps = int(args.move[1])
-            except:
+            except TypeError:
                 steps = None
 
             try:
                 edge = args.move[2]
-            except:
+            except TypeError:
                 edge = None
 
-            print (id_osm.move(speed, steps, edge))
+            print(id_osm.move(speed, steps, edge))
 
 
 if __name__ == "__main__":

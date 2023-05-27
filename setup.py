@@ -5,7 +5,7 @@ from distutils.core import setup
 
 
 setup(name="python-osm",
-      version='0.2.1',
+      version='0.2.2',
       description='OSM step motor controller module',
       url='https://github.com/RAA80/python-osm',
       author='Ryadno Alexey',

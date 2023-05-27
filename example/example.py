@@ -19,17 +19,16 @@ transport = ModbusSerialClient(method='rtu',
 id_osm = Client(transport=transport, device=OSM17, unit=1)
 print(id_osm)
 
-print("State: {}".format(id_osm.state()))
-print("Set Enable: {}".format(id_osm.setParam("Enable", 1)))
-print("Get Enable: {}".format(id_osm.getParam("Enable")))
-print("Set Current: {}".format(id_osm.setParam("Current", 100)))
-print("Get Current: {}".format(id_osm.getParam("Current")))
+print("Set Enable: {}".format(id_osm.set_param("Enable", 1)))
+print("Set Current: {}".format(id_osm.set_param("Current", 100)))
 
 print("Move: {}".format(id_osm.move(speed=100, steps=200, edge="IN1")))
 
 sleep(5)
 
-print("Set Current: {}".format(id_osm.setParam("Current", 0)))
-print("Set Enable: {}".format(id_osm.setParam("Enable", 0)))
+print("Set Current: {}".format(id_osm.set_param("Current", 0)))
+print("Set Enable: {}".format(id_osm.set_param("Enable", 0)))
 
+#print("State: {}".format(id_osm.state()))
+#print("Get Enable: {}".format(id_osm.get_param("Enable")))
 #print("Reset: {}".format(id_osm.reset()))

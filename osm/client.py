@@ -51,7 +51,7 @@ class Client(object):
     def __repr__(self):
         return "Client(transport={}, unit={})".format(self._socket, self.unit)
 
-    def _errorCheck(self, name, retcode):
+    def _error_check(self, name, retcode):
         if not retcode:         # for python2 and pymodbus v1.3.0
             _logger.error("Unit %d called '%s' with error: "
                           "Modbus Error: [Input/Output] No Response received "
@@ -61,26 +61,23 @@ class Client(object):
         else:
             return True
 
-    def getParam(self, name):
+    def get_param(self, name):
         ''' Чтение значения параметра по заданному имени '''
 
         _dev = self.device[name]
 
-        if _dev['type'] in ["I32", "U32"]: count = 2
-        elif _dev['type'] in ["U16", "U8"]: count = 1
-
+        count = {"I32": 2, "U32": 2, "U16": 1, "U8": 1}[_dev['type']]
         result = self._socket.read_holding_registers(address=_dev['address'],
                                                      count=count,
                                                      unit=self.unit)
-        if self._errorCheck(name, result):
+        if self._error_check(name, result):
             decoder = BinaryPayloadDecoder.fromRegisters(result.registers, Endian.Big)
 
-            if _dev['type'] == "I32":   return decoder.decode_32bit_int()
-            elif _dev['type'] == "U32": return decoder.decode_32bit_uint()
-            elif _dev['type'] == "U16": return decoder.decode_16bit_uint()
-            elif _dev['type'] == "U8":  return decoder.decode_16bit_uint()
+            return {"I32": decoder.decode_32bit_int,  "U32": decoder.decode_32bit_uint,
+                    "U16": decoder.decode_16bit_uint, "U8":  decoder.decode_16bit_uint
+                   }[_dev['type']]()
 
-    def setParam(self, name, value):
+    def set_param(self, name, value):
         ''' Запись значения параметра по заданному имени '''
 
         _dev = self.device[name]
@@ -90,17 +87,15 @@ class Client(object):
                              format(name, _dev['min'], _dev['max'], value))
 
         builder = BinaryPayloadBuilder(None, Endian.Big)
-
-        if _dev['type'] == "I32":   builder.add_32bit_int(value)
-        elif _dev['type'] == "U32": builder.add_32bit_uint(value)
-        elif _dev['type'] == "U16": builder.add_16bit_uint(value)
-        elif _dev['type'] == "U8":  builder.add_16bit_uint(value)
+        {"I32": builder.add_32bit_int,  "U32": builder.add_32bit_uint,
+         "U16": builder.add_16bit_uint, "U8":  builder.add_16bit_uint
+        }[_dev['type']](value)
 
         result = self._socket.write_registers(address=_dev['address'],
                                               values=builder.build(),
                                               skip_encode=True,
                                               unit=self.unit)
-        return self._errorCheck(name, result)
+        return self._error_check(name, result)
 
     def move(self, speed=None, steps=None, edge=None):
         ''' В зависимости от установленных параметров, происходит движение
@@ -110,7 +105,7 @@ class Client(object):
 
         edges = ("STEP", "DIR", "IN1", "IN2", "HOME")
         if edge and edge not in edges:
-            raise ValueError("Unknown edge. Must be 'STEP', 'DIR', 'IN1', 'IN2', 'HOME'")
+            raise ValueError("Unknown edge. Choose from {}".format(edges))
 
         args = []
         if speed:
@@ -118,36 +113,26 @@ class Client(object):
             args.append(("Speed", abs(speed)))
             if steps:
                 args.append(("StepsNumber", steps))
-                if edge in edges:
-                    if edge == "STEP": args.append(("Command", CMD_MOVE_STEP_N))
-                    if edge == "DIR":  args.append(("Command", CMD_MOVE_DIR_N))
-                    if edge == "IN1":  args.append(("Command", CMD_MOVE_IN1_N))
-                    if edge == "IN2":  args.append(("Command", CMD_MOVE_IN2_N))
-                    if edge == "HOME": args.append(("Command", CMD_FIND_HOME_N))
-                else:
-                    args.append(("Command", CMD_MOVE_N))
+                cmd = {"STEP": CMD_MOVE_STEP_N, "DIR": CMD_MOVE_DIR_N,
+                       "IN1":  CMD_MOVE_IN1_N,  "IN2": CMD_MOVE_IN2_N,
+                       "HOME": CMD_FIND_HOME_N, None:  CMD_MOVE_N}
+                args.append(("Command", cmd[edge]))
+            elif edge:
+                cmd = {"STEP": CMD_MOVE_STEP, "DIR": CMD_MOVE_DIR,
+                       "IN1":  CMD_MOVE_IN1,  "IN2": CMD_MOVE_IN2,
+                       "HOME": CMD_FIND_HOME}
+                args.append(("Command", cmd[edge]))
             else:
-                if edge in edges:
-                    if edge == "STEP": args.append(("Command", CMD_MOVE_STEP))
-                    if edge == "DIR":  args.append(("Command", CMD_MOVE_DIR))
-                    if edge == "IN1":  args.append(("Command", CMD_MOVE_IN1))
-                    if edge == "IN2":  args.append(("Command", CMD_MOVE_IN2))
-                    if edge == "HOME": args.append(("Command", CMD_FIND_HOME))
-                else:
-                    args.append(("Command", CMD_MOVE))
+                args.append(("Command", CMD_MOVE))
         else:
             args.append(("Command", CMD_STOP))
 
-        for arg in args:
-            if not self.setParam(*arg):
-                return None
-
-        return True
+        return next((None for arg in args if not self.set_param(*arg)), True)
 
     def state(self):
         ''' Чтение состояния '''
 
-        val = self.getParam("Inputs")
+        val = self.get_param("Inputs")
         if val is not None:
             return {"STEP": bool(val>>5 & 1),
                     "EN":   bool(val>>4 & 1),
@@ -159,7 +144,7 @@ class Client(object):
     def reset(self):
         ''' Перезагрузка контроллера. Все параметры сбрасываются, движение прекращается '''
 
-        return self.setParam("Command", CMD_RESET)
+        return self.set_param("Command", CMD_RESET)
 
 
 __all__ = [ "Client" ]
