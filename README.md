@@ -4,11 +4,6 @@
 
 ### 1. Работа с консольной версией ###
 
-Программа может работать в двух режимах
-
-- Режим **Scanner**
-- Режим **User**
-
         usage: osm-console [-h] --port [PORT] [--timeout [VALUE]] [--debug] [--scan]
                            [--baudrate [RATE]] [--unit [UNIT]]
                            [--reset | --state | --get KEY | --set KEY VALUE | --move [ARG [ARG ...]]]
@@ -41,28 +36,51 @@
           --set KEY VALUE         Write config value. See --get for possible KEY values
           --move [ARG [ARG ...]]  Send move command with args: Speed, Steps, Edge
 
-##### Режим Scanner #####
+Программа может работать в двух режимах: **Scanner** и **User**
+
+#### Режим Scanner ####
+
+В этом режиме происходит поиск активных модулей, подключенных к порту
 
 Пример использования режима Scanner:
 
-	osm-console --port COM1 --scan
+    osm-console --port COM1 --scan
 
-Пример использования режима Scanner с выводом отладочной информации:
+Пример результата работы:
 
-	osm-console --port COM1 --scan --debug
+    Unit: 4, Baudrate: 115200 - OK
 
-##### Режим User #####
+#### Режим User ####
 
 Пример использования режима User:
 
-	osm-console --port COM1 --baudrate 57600 --unit 1 --state
-	osm-console --port COM1 --baudrate 57600 --unit 1 --get Address
-	osm-console --port COM1 --baudrate 57600 --unit 1 --set Enable 1
-	osm-console --port COM1 --baudrate 57600 --unit 1 --move 100 1000 IN1
+-   Чтение регистра входных сигналов
 
-Пример использования режима User с выводом отладочной информации:
+        osm-console --port COM1 --baudrate 57600 --unit 1 --state
 
-	osm-console --port COM1 --baudrate 57600 --unit 1 --state --debug
+-   Чтение значения регистра контроллера
+
+        osm-console --port COM1 --baudrate 57600 --unit 1 --get Enable
+
+-   Запись значения в регистр контроллера
+
+        osm-console --port COM1 --baudrate 57600 --unit 1 --set Enable 1
+
+-   Движение с постоянной скоростью 100 (или -100 для движения в обратную сторону)
+
+        osm-console --port COM1 --baudrate 57600 --unit 1 --move 100
+
+-   Движение со скоростью 100, но не более 1000 шагов
+
+        osm-console --port COM1 --baudrate 57600 --unit 1 --move 100 1000
+
+-   Движение со скоростью 100 до срабатывания датчика, подключенного ко входу IN1
+
+        osm-console --port COM1 --baudrate 57600 --unit 1 --move 100 0 IN1
+
+-   Движение со скоростью 100 до срабатывания датчика, подключенного ко входу IN1, но не более 1000 шагов
+
+        osm-console --port COM1 --baudrate 57600 --unit 1 --move 100 1000 IN1
 
 ### 2. Работа с графической версией ###
 
@@ -70,15 +88,15 @@
 
 ### 3. Работа с симулятором ###
 
-	usage: osm-simulator [-h] [--tcp | --udp | --serial PORT]
+    usage: osm-simulator [-h] [--tcp | --udp | --serial PORT]
 
-	OSM stepper simulator command-line option
+    OSM stepper simulator command-line option
 
-	optional arguments:
-	  -h, --help     show this help message and exit
-	  --tcp          Use TCP simulator
-	  --udp          Use UDP simulator
-	  --serial PORT  Use SERIAL simulator
+    optional arguments:
+        -h, --help     show this help message and exit
+        --tcp          Use TCP simulator
+        --udp          Use UDP simulator
+        --serial PORT  Use SERIAL simulator
 
 Пример использования симулятора:
 

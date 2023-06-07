@@ -45,17 +45,17 @@ def Process(args):
         elif args.move:
             try:
                 speed = int(args.move[0])
-            except TypeError:
+            except Exception:
                 speed = None
 
             try:
                 steps = int(args.move[1])
-            except TypeError:
+            except Exception:
                 steps = None
 
             try:
                 edge = args.move[2]
-            except TypeError:
+            except Exception:
                 edge = None
 
             print(id_osm.move(speed, steps, edge))
