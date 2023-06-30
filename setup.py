@@ -5,15 +5,15 @@ from distutils.core import setup
 
 
 setup(name="python-osm",
-      version='0.2.2',
+      version='0.2.3',
       description='OSM step motor controller module',
       url='https://github.com/RAA80/python-osm',
-      author='Ryadno Alexey',
+      author='Alexey Ryadno',
       author_email='aryadno@mail.ru',
       license='MIT',
       packages=['osm'],
       scripts=['scripts/osm-console', 'scripts/osm-gui', 'scripts/osm-simulator'],
-      install_requires=['pymodbus >= 1.3',],
+      install_requires=['pymodbus < 3',],
       platforms=['Linux', 'Mac OS X', 'Windows'],
       classifiers=['Development Status :: 4 - Beta',
                    'Intended Audience :: Science/Research',

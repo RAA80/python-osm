@@ -51,13 +51,9 @@ class Client(object):
     def __repr__(self):
         return "Client(transport={}, unit={})".format(self._socket, self.unit)
 
-    def _error_check(self, name, retcode):
-        if not retcode:         # for python2 and pymodbus v1.3.0
-            _logger.error("Unit %d called '%s' with error: "
-                          "Modbus Error: [Input/Output] No Response received "
-                          "from the remote unit", self.unit, name)
-        elif isinstance(retcode, (ModbusException, ExceptionResponse)):
-            _logger.error("Unit %d called '%s' with error: %s", self.unit, name, retcode)
+    def _error_check(self, retcode):
+        if isinstance(retcode, (ModbusException, ExceptionResponse, type(None))):
+            _logger.error("Unit %d return %s", self.unit, retcode)
         else:
             return True
 
@@ -70,7 +66,7 @@ class Client(object):
         result = self._socket.read_holding_registers(address=_dev['address'],
                                                      count=count,
                                                      unit=self.unit)
-        if self._error_check(name, result):
+        if self._error_check(result):
             decoder = BinaryPayloadDecoder.fromRegisters(result.registers, Endian.Big)
 
             return {"I32": decoder.decode_32bit_int,  "U32": decoder.decode_32bit_uint,
@@ -95,7 +91,7 @@ class Client(object):
                                               values=builder.build(),
                                               skip_encode=True,
                                               unit=self.unit)
-        return self._error_check(name, result)
+        return self._error_check(result)
 
     def move(self, speed=None, steps=None, edge=None):
         ''' В зависимости от установленных параметров, происходит движение
