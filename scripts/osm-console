@@ -1,90 +1,83 @@
-#! /usr/bin/env python
-# -*- coding: utf-8 -*-
+#! /usr/bin/env python3
 
-import logging
 import argparse
+import contextlib
+import logging
 import time
-from pymodbus.client.sync import ModbusSerialClient
+
 from osm.client import Client
 from osm.device import OSM17
 
-_keys = sorted(OSM17.keys())
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="OSM controllers command-line option")
 
+    parser.add_argument("--port", type=str, required=True,
+                                  help="select port name")
+    parser.add_argument("--timeout", type=float, nargs="?", metavar=("VALUE"),
+                                     const=0.2,
+                                     help="select timeout in seconds")
+    parser.add_argument("--debug", action="store_true",
+                                   help="print debug information")
+    group1 = parser.add_argument_group("Scanner")
+    group1.add_argument("--scan", action="store_true",
+                                  help="scan available modules")
+    group2 = parser.add_argument_group("User")
+    group2.add_argument("--baudrate", type=int,
+                                      help="select OSM baudrate")
+    group2.add_argument("--unit", type=int,
+                                  help="select OSM address")
+    group2_ex = group2.add_mutually_exclusive_group()
+    group2_ex.add_argument("--reset", action="store_true",
+                                      help="send RESET request")
+    group2_ex.add_argument("--state", action="store_true",
+                                      help="read OSM state")
+    group2_ex.add_argument("--get", type=str, nargs=1, metavar=("KEY"),
+                                    choices=sorted(OSM17.keys()),
+                                    help="read config value")
+    group2_ex.add_argument("--set", type=str, nargs=2, metavar=("KEY", "VALUE"),
+                                    help="write config value")
+    group2_ex.add_argument("--move", type=str, nargs="+", metavar=("ARG"),
+                                     help="send MOVE command with Speed, Steps, Edge")
+    args = parser.parse_args()
 
-def Process(args):
-    _timeout = args.timeout if args.timeout is not None else 0.2
+    timeout = args.timeout or 0.2
     if args.debug:
         logging.basicConfig(level=logging.DEBUG)
 
     if args.scan:
-        for baudrate in (57600, 115200, 1200, 2400, 4800, 9600, 19200, 38400):
-            transport = ModbusSerialClient(method='rtu', port=args.port,
-                                           baudrate=baudrate, timeout=_timeout)
+        for baudrate in (115200, 57600, 38400, 19200, 9600, 4800, 2400, 1200):
             for unit in range(1, 33):
-                id_osm = Client(transport=transport, device=OSM17, unit=unit)
-                try:
-                    if id_osm.state():
-                        print("Unit: {}, Baudrate: {} - OK".format(unit, baudrate))
-                        time.sleep(_timeout)
-                except Exception:
-                    pass
+                client = Client(unit=unit, port=args.port, baudrate=baudrate,
+                                device=OSM17, timeout=timeout)
+                with contextlib.suppress(Exception):
+                    if client.state():
+                        print(f"Unit: {unit}, Baudrate: {baudrate} - OK")
+                        time.sleep(timeout)
     else:
-        transport = ModbusSerialClient(method='rtu', port=args.port,
-                                       baudrate=args.baudrate, timeout=_timeout,
-                                       retry_on_empty=True)
-        id_osm = Client(transport=transport, device=OSM17, unit=args.unit)
-
+        client = Client(unit=args.unit, port=args.port, baudrate=args.baudrate,
+                        device=OSM17, timeout=timeout)
         if args.state:
-            print(id_osm.state())
+            print(client.state())
         elif args.reset:
-            print(id_osm.reset())
+            print(client.reset())
         elif args.get:
-            print("{} = {}".format(args.get[0], id_osm.get_param(args.get[0])))
+            print(f"{args.get[0]} = {client.get_param(args.get[0])}")
         elif args.set:
-            print(id_osm.set_param(args.set[0], int(args.set[1])))
+            print(client.set_param(args.set[0], int(args.set[1])))
         elif args.move:
             try:
                 speed = int(args.move[0])
             except Exception:
-                speed = None
+                speed = 0
 
             try:
                 steps = int(args.move[1])
             except Exception:
-                steps = None
+                steps = 0
 
             try:
                 edge = args.move[2]
             except Exception:
-                edge = None
+                edge = ""
 
-            print(id_osm.move(speed, steps, edge))
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='OSM stepper driver controller command-line option')
-
-    parser.add_argument('--port', type=str, nargs='?', const='COM1', required=True, help='Set used port name')
-    parser.add_argument('--timeout', type=float, nargs='?', metavar=('VALUE'), const=0.2, help='Set used timeout in second')
-    parser.add_argument('--debug', action='store_true', help='Print debug information')
-
-    group1 = parser.add_argument_group('Scanner')
-    group1.add_argument('--scan', action='store_true', help='Scan available modules')
-
-    group2 = parser.add_argument_group('User')
-    group2.add_argument('--baudrate', type=int, nargs='?', metavar=('RATE'), const=57600, help='Set used OSM baudrate')
-    group2.add_argument('--unit', type=int, nargs='?', const=1, help='Set used OSM address')
-
-    group2_ex = group2.add_mutually_exclusive_group()
-    group2_ex.add_argument('--reset', action='store_true', help='Send RESET request')
-    group2_ex.add_argument('--state', action='store_true', help='Read OSM state')
-    group2_ex.add_argument('--get', type=str, nargs=1, metavar=('KEY'), choices=_keys,
-                                    help='Read config value. Possible KEY values: ' + str(_keys))
-    group2_ex.add_argument('--set', type=str, nargs=2, metavar=('KEY', 'VALUE'),
-                                    help='Write config value. See --get for possible KEY values')
-    group2_ex.add_argument('--move', type=str, nargs="*", metavar=('ARG'), help='Send move command with args: Speed, Steps, Edge')
-
-    parser.set_defaults(func=Process)
-
-    args = parser.parse_args()
-    args.func(args)
+            print(client.move(speed, steps, edge))

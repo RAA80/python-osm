@@ -1,34 +1,26 @@
-#! /usr/bin/env python
-# -*- coding: utf-8 -*-
+#! /usr/bin/env python3
 
-import logging
+"""Пример использования библиотеки."""
+
 from time import sleep
 
-from pymodbus.client.sync import ModbusSerialClient
 from osm.client import Client
-from osm.device import OSM17        # Для OSM-17RA, OSM-42RA, OSM-88RA параметры одинаковые
+from osm.device import OSM17
 
-logging.basicConfig(level=logging.INFO)
+if __name__ == "__main__":
+    client = Client(unit=1, port="COM5", baudrate=115200, device=OSM17)
+    print(client)
 
+    print(f'Set Enable: {client.set_param("Enable", 1)}')   # Остальные названия параметров в файле 'device.py'
+    print(f'Set Current: {client.set_param("Current", 100)}')
 
-transport = ModbusSerialClient(method='rtu',
-                               port="COM5",
-                               baudrate=115200,
-                               timeout=0.2,
-                               retry_on_empty=True)
-id_osm = Client(transport=transport, device=OSM17, unit=1)
-print(id_osm)
+    print(f'Move: {client.move(speed=100, steps=200, edge="IN1")}')
 
-print("Set Enable: {}".format(id_osm.set_param("Enable", 1)))
-print("Set Current: {}".format(id_osm.set_param("Current", 100)))
+    sleep(5)
 
-print("Move: {}".format(id_osm.move(speed=100, steps=200, edge="IN1")))
+    print(f'Set Current: {client.set_param("Current", 0)}')
+    print(f'Set Enable: {client.set_param("Enable", 0)}')
 
-sleep(5)
-
-print("Set Current: {}".format(id_osm.set_param("Current", 0)))
-print("Set Enable: {}".format(id_osm.set_param("Enable", 0)))
-
-#print("State: {}".format(id_osm.state()))
-#print("Get Enable: {}".format(id_osm.get_param("Enable")))
-#print("Reset: {}".format(id_osm.reset()))
+    # print(f"State: {client.state()}")
+    # print(f'Get Enable: {client.get_param("Enable")}')
+    # print(f"Reset: {client.reset()}")

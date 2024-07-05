@@ -1,12 +1,11 @@
-#! /usr/bin/env python
-# -*- coding: utf-8 -*-
+#! /usr/bin/env python3
 
 import argparse
-import threading
+from threading import Thread
 from time import sleep
 
 from pymodbus.datastore import ModbusServerContext, ModbusSlaveContext, ModbusSparseDataBlock
-from pymodbus.server.sync import StartSerialServer, StartTcpServer, StartUdpServer
+from pymodbus.server.sync import StartSerialServer
 from pymodbus.transaction import ModbusRtuFramer
 
 
@@ -15,7 +14,7 @@ def SimOSM(arg):
     store = {i: ModbusSlaveContext(ModbusSparseDataBlock.create()) for i in range(32)}
     context = ModbusServerContext(slaves=store, single=False)
 
-    for i,_ in enumerate(context):
+    for i, _ in enumerate(context):
         context[i].setValues(fx=3, address=0, values=[i])
         context[i].setValues(fx=3, address=1, values=[6])
         context[i].setValues(fx=3, address=2, values=[25])
@@ -54,13 +53,8 @@ def SimOSM(arg):
         drivers.append(driver)
 
     try:
-        if arg.tcp:
-            StartTcpServer(context, address=("localhost", 5020))
-        elif arg.udp:
-            StartUdpServer(context, address=("localhost", 5020))
-        elif arg.serial:
-            StartSerialServer(context, framer=ModbusRtuFramer,
-                              port=arg.serial[0], timeout=0.01, baudrate=57600)
+        StartSerialServer(context, framer=ModbusRtuFramer,
+                          port=arg.port, timeout=0.1, baudrate=57600)
     except KeyboardInterrupt:
         for driver in drivers:
             driver.stop = True
@@ -68,9 +62,9 @@ def SimOSM(arg):
             driver.join()
 
 
-class Driver(threading.Thread):
+class Driver(Thread):
     def __init__(self, context):
-        threading.Thread.__init__(self)
+        Thread.__init__(self)
 
         self.context = context
         self.first_run = True
@@ -137,28 +131,29 @@ class Driver(threading.Thread):
             sleep(1.0)
 
     def stop_moving(self):
-        ''' Остановка двигателя '''
+        """Остановка двигателя."""
 
         self.context.setValues(fx=3, address=5, values=[0])
         self.context.setValues(fx=3, address=16385, values=[0])
         self.set_speed_current(0)
 
     def reset(self):
-        ''' Перезагрузка контроллера. Все параметры сбрасываются,
-            движение прекращается '''
+        """Перезагрузка контроллера. Все параметры сбрасываются,
+        движение прекращается.
+        """
 
         self.stop_moving()
         self.context.setValues(fx=3, address=8, values=[0x3F])
 
     def unlimited_moving(self, speed, microstep, position, direction):
-        ''' Бесконечное движение '''
+        """Бесконечное движение."""
 
         self.set_speed_current(speed)
         position = self.set_position(position, direction, speed, microstep)
         self.check_edge(position)
 
     def move_steps(self, stepsnumber, stepscounter, speed, microstep, position, direction):
-        ''' Движение stepsnumber шагов '''
+        """Движение stepsnumber шагов."""
 
         if self.set_steps_counter(stepsnumber, stepscounter, speed, microstep):
             self.first_run = True
@@ -167,19 +162,20 @@ class Driver(threading.Thread):
         self.unlimited_moving(speed, microstep, position, direction)
 
     def move_to_edge(self, speed, microstep, position, direction):
-        ''' Движение до срабатывания датчика, подключенного ко входу (только IN1 и IN2) '''
+        """Движение до срабатывания датчика, подключенного ко входу (только IN1 и IN2)."""
 
         self.unlimited_moving(speed, microstep, position, direction)
 
     def move_to_edge_with_steps(self, stepsnumber, stepscounter, speed, microstep, position, direction):
-        ''' Движение до срабатывания датчика, подключенного ко входу (только IN1 и IN2),
-            но не более stepsnumber шагов '''
+        """Движение до срабатывания датчика, подключенного ко входу (только IN1 и IN2),
+        но не более stepsnumber шагов.
+        """
 
         self.move_steps(stepsnumber, stepscounter, speed, microstep, position, direction)
 
     def set_position(self, position, direction, speed, microstep):
-        position = position - int(speed/microstep) if direction else \
-                   position + int(speed/microstep)
+        position = position - int(speed / microstep) if direction else \
+                   position + int(speed / microstep)
         position = min(position, 10000)
         position = max(position, 0)
 
@@ -191,8 +187,8 @@ class Driver(threading.Thread):
         self.context.setValues(fx=3, address=16390, values=[speed])
 
     def set_steps_counter(self, stepsnumber, stepscounter, speed, microstep):
-        stepscounter = stepsnumber - int(speed/microstep) if self.first_run else \
-                       stepscounter - int(speed/microstep)
+        stepscounter = stepsnumber - int(speed / microstep) if self.first_run else \
+                       stepscounter - int(speed / microstep)
         self.context.setValues(fx=3, address=32772, values=[(stepscounter & 0xFFFF0000) >> 16,
                                                             stepscounter & 0x0000FFFF])
         self.first_run = False
@@ -210,12 +206,10 @@ class Driver(threading.Thread):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='OSM stepper driver simulator command-line option')
+    parser = argparse.ArgumentParser(description="OSM stepper driver simulator command-line option")
 
     group = parser.add_mutually_exclusive_group()
-    group.add_argument('--tcp', action='store_true', help='Use TCP simulator')
-    group.add_argument('--udp', action='store_true', help='Use UDP simulator')
-    group.add_argument('--serial', type=str, nargs=1, metavar=('PORT'), help='Use SERIAL simulator')
+    group.add_argument("--port", type=str, help="select port name")
     args = parser.parse_args()
 
     SimOSM(args)
