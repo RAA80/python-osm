@@ -47,15 +47,15 @@ if __name__ == "__main__":
     if args.scan:
         for baudrate in (115200, 57600, 38400, 19200, 9600, 4800, 2400, 1200):
             for unit in range(1, 33):
-                client = Client(unit=unit, port=args.port, baudrate=baudrate,
-                                device=OSM17, timeout=timeout)
+                client = Client(port=args.port, baudrate=baudrate, unit=unit,
+                                timeout=timeout)
                 with contextlib.suppress(Exception):
                     if client.state():
                         print(f"Unit: {unit}, Baudrate: {baudrate} - OK")
                         time.sleep(timeout)
     else:
-        client = Client(unit=args.unit, port=args.port, baudrate=args.baudrate,
-                        device=OSM17, timeout=timeout)
+        client = Client(port=args.port, baudrate=args.baudrate, unit=args.unit,
+                        timeout=timeout)
         if args.state:
             print(client.state())
         elif args.reset:

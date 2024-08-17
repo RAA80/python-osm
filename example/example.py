@@ -5,10 +5,9 @@
 from time import sleep
 
 from osm.client import Client
-from osm.device import OSM17
 
 if __name__ == "__main__":
-    client = Client(unit=1, port="COM5", baudrate=115200, device=OSM17)
+    client = Client(port="COM5", baudrate=115200, unit=1)
     print(client)
 
     print(f'Set Enable: {client.set_param("Enable", 1)}')   # Остальные названия параметров в файле 'device.py'

@@ -2,50 +2,58 @@
 
 """Реализация класса клиента для управления контроллером шаговых двигателей OSM."""
 
+from enum import IntEnum
+
 from pymodbus.client.sync import ModbusSerialClient
 from pymodbus.constants import Endian
 from pymodbus.payload import BinaryPayloadBuilder, BinaryPayloadDecoder
 from pymodbus.pdu import ModbusResponse
 
-# Команды движения (Таблица 6.4.2 документации)
-CMD_STOP = 0x00
-CMD_MOVE = 0x01
-CMD_MOVE_N = 0x02
-CMD_MOVE_STEP = 0x03
-CMD_MOVE_DIR = 0x04
-CMD_ADC_SPEED = 0x05
-CMD_WL = 0x06
-CMD_WH = 0x07
-CMD_REVERS = 0x08
-CMD_MOVE_IN1 = 0x09
-CMD_MOVE_IN2 = 0x0A
-CMD_FIND_HOME = 0x0B
-CMD_RESET = 0x0C
-CMD_MOVE_IN1_N = 0x0D
-CMD_MOVE_IN2_N = 0x0E
-CMD_FIND_HOME_N = 0x0F
-CMD_MOVE_STEP_N = 0x10
-CMD_MOVE_DIR_N = 0x11
-CMD_MAKE_STEP = 0x12
-CMD_SAVE_PARAMETERS = 0x13
+from .device import OSM17
 
 
 class OsmError(Exception):
     pass
 
 
+class CMD(IntEnum):     # Таблица 6.4.2 документации
+    """Команды управления."""
+
+    STOP = 0x00
+    MOVE = 0x01
+    MOVE_N = 0x02
+    MOVE_STEP = 0x03
+    MOVE_DIR = 0x04
+    ADC_SPEED = 0x05
+    WL = 0x06
+    WH = 0x07
+    REVERS = 0x08
+    MOVE_IN1 = 0x09
+    MOVE_IN2 = 0x0A
+    FIND_HOME = 0x0B
+    RESET = 0x0C
+    MOVE_IN1_N = 0x0D
+    MOVE_IN2_N = 0x0E
+    FIND_HOME_N = 0x0F
+    MOVE_STEP_N = 0x10
+    MOVE_DIR_N = 0x11
+    MAKE_STEP = 0x12
+    SAVE_PARAMETERS = 0x13
+
+
 class Client:
     """Класс для управления контроллером шаговых двигателей OSM."""
 
-    def __init__(self, unit: int, port: str, baudrate: int,
-                       device: dict, timeout: float = 1.0) -> None:
+    def __init__(self, port: str, baudrate: int, unit: int,
+                       timeout: float = 1.0) -> None:
         """Инициализация класса клиента с указанными параметрами."""
 
         self.socket = ModbusSerialClient(method="rtu", port=port,
                                          baudrate=baudrate, timeout=timeout)
         self.socket.connect()
 
-        self.device = device
+        self.port = port
+        self.baudrate = baudrate
         self.unit = unit
 
     def __del__(self) -> None:
@@ -57,7 +65,8 @@ class Client:
     def __repr__(self) -> str:
         """Строковое представление объекта."""
 
-        return f"{type(self).__name__}(socket={self.socket}, unit={self.unit})"
+        return (f"{type(self).__name__}(port={self.port!r}, "
+                f"baudrate={self.baudrate}, unit={self.unit})")
 
     @staticmethod
     def _check_error(retcode: ModbusResponse) -> bool:
@@ -67,10 +76,20 @@ class Client:
             raise OsmError(retcode)
         return True
 
+    @staticmethod
+    def _check_name(name: str) -> dict:
+        """Проверка названия параметра."""
+
+        if name not in OSM17:
+            msg = f"Unknown parameter '{name}'"
+            raise OsmError(msg)
+
+        return OSM17[name]
+
     def get_param(self, name: str) -> int:
         """Чтение данных из устройства."""
 
-        dev = self.device[name]
+        dev = self._check_name(name)
 
         count = {"I32": 2, "U32": 2, "U16": 1}[dev["type"]]
         result = self.socket.read_holding_registers(address=dev["address"],
@@ -87,7 +106,7 @@ class Client:
     def set_param(self, name: str, value: int) -> bool:
         """Запись данных в устройство."""
 
-        dev = self.device[name]
+        dev = self._check_name(name)
 
         if value not in range(dev["min"], dev["max"] + 1):
             msg = f"An '{name}' value of '{value}' is out of range"
@@ -121,26 +140,26 @@ class Client:
             args.extend((("Direction", speed < 0), ("Speed", abs(speed))))
             if steps:
                 args.append(("StepsNumber", steps))
-                cmd = {"DIR": CMD_MOVE_DIR_N, "STEP": CMD_MOVE_STEP_N,
-                       "IN1": CMD_MOVE_IN1_N, "HOME": CMD_FIND_HOME_N,
-                       "IN2": CMD_MOVE_IN2_N}
-                args.append(("Command", cmd.get(edge, CMD_MOVE_N)))
+                cmd = {"DIR": CMD.MOVE_DIR_N, "STEP": CMD.MOVE_STEP_N,
+                       "IN1": CMD.MOVE_IN1_N, "HOME": CMD.FIND_HOME_N,
+                       "IN2": CMD.MOVE_IN2_N}
+                args.append(("Command", cmd.get(edge, CMD.MOVE_N)))
             elif edge:
-                cmd = {"DIR": CMD_MOVE_DIR, "STEP": CMD_MOVE_STEP,
-                       "IN1": CMD_MOVE_IN1, "HOME": CMD_FIND_HOME,
-                       "IN2": CMD_MOVE_IN2}
+                cmd = {"DIR": CMD.MOVE_DIR, "STEP": CMD.MOVE_STEP,
+                       "IN1": CMD.MOVE_IN1, "HOME": CMD.FIND_HOME,
+                       "IN2": CMD.MOVE_IN2}
                 args.append(("Command", cmd[edge]))
             else:
-                args.append(("Command", CMD_MOVE))
+                args.append(("Command", CMD.MOVE))
         else:
-            args.append(("Command", CMD_STOP))
+            args.append(("Command", CMD.STOP))
 
         for arg in args:
             self.set_param(*arg)
 
         return True
 
-    def state(self) -> dict:
+    def state(self) -> dict:    # Таблица 6.4.3 документации
         """Чтение состояния."""
 
         val = self.get_param("Inputs")
@@ -154,7 +173,7 @@ class Client:
     def reset(self) -> bool:
         """Все параметры сбрасываются, движение прекращается."""
 
-        return self.set_param("Command", CMD_RESET)
+        return self.set_param("Command", CMD.RESET)
 
 
 __all__ = ["Client"]

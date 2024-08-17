@@ -9,7 +9,7 @@ from pymodbus.server.sync import StartSerialServer
 from pymodbus.transaction import ModbusRtuFramer
 
 
-def SimOSM(arg):
+def SimOSM(port):
     drivers = []
     store = {i: ModbusSlaveContext(ModbusSparseDataBlock.create()) for i in range(32)}
     context = ModbusServerContext(slaves=store, single=False)
@@ -54,7 +54,7 @@ def SimOSM(arg):
 
     try:
         StartSerialServer(context, framer=ModbusRtuFramer,
-                          port=arg.port, timeout=0.1, baudrate=57600)
+                          port=port, timeout=0.2, baudrate=57600)
     except KeyboardInterrupt:
         for driver in drivers:
             driver.stop = True
@@ -212,4 +212,4 @@ if __name__ == "__main__":
     group.add_argument("--port", type=str, help="select port name")
     args = parser.parse_args()
 
-    SimOSM(args)
+    SimOSM(args.port)

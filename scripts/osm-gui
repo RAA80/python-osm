@@ -7,7 +7,7 @@ import time
 import tkinter as tk
 from tkinter import ttk
 
-from osm.client import CMD_SAVE_PARAMETERS, Client
+from osm.client import CMD, Client
 from osm.device import OSM17
 
 if os.name == "nt":                                 # sys.platform == 'win32':
@@ -281,7 +281,7 @@ class OsmGui(object):
             self.varCurVal.set(self.id_osm.get_param(self.varCode.get()))
 
     def Button_Save(self):
-        self.id_osm.set_param("Command", CMD_SAVE_PARAMETERS)
+        self.id_osm.set_param("Command", CMD.SAVE_PARAMETERS)
 
     def Button_Reset(self):
         self.id_osm.reset()
@@ -342,8 +342,8 @@ class OsmGui(object):
 
         logging.basicConfig(level=logging.DEBUG if self.varDebug.get() else logging.INFO)
 
-        self.id_osm = Client(unit=selected_unit, port=selected_port, baudrate=selected_baudrate,
-                             device=OSM17, timeout=self.varTimeout.get())
+        self.id_osm = Client(port=selected_port, baudrate=selected_baudrate,
+                             unit=selected_unit, timeout=self.varTimeout.get())
 
         self.comboCode.config(values=sorted(OSM17.keys()))
 
@@ -395,8 +395,8 @@ class OsmGui(object):
 
         for baudrate in (115200, 57600, 38400, 19200, 9600, 4800, 2400, 1200):
             for unit in range(1, 33):
-                client = Client(unit=unit, port=selected_port, baudrate=baudrate,
-                                device=OSM17, timeout=self.varTimeout.get())
+                client = Client(port=selected_port, baudrate=baudrate, unit=unit,
+                                timeout=self.varTimeout.get())
                 with contextlib.suppress(Exception):
                     if client.state():
                         iid = self.modulelist.insert("", "end", values=(unit, baudrate))
