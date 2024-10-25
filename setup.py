@@ -3,7 +3,7 @@
 from setuptools import setup
 
 setup(name="python-osm",
-      version="0.3",
+      version="0.3.1",
       description="OSM controllers library",
       url="https://github.com/RAA80/python-osm",
       author="Alexey Ryadno",

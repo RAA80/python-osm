@@ -32,7 +32,7 @@ if __name__ == "__main__":
     group2_ex.add_argument("--state", action="store_true",
                                       help="read OSM state")
     group2_ex.add_argument("--get", type=str, nargs=1, metavar=("KEY"),
-                                    choices=sorted(OSM17.keys()),
+                                    choices=sorted(OSM17),
                                     help="read config value")
     group2_ex.add_argument("--set", type=str, nargs=2, metavar=("KEY", "VALUE"),
                                     help="write config value")

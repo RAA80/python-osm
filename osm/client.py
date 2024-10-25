@@ -2,6 +2,8 @@
 
 """Реализация класса клиента для управления контроллером шаговых двигателей OSM."""
 
+from __future__ import annotations
+
 from enum import IntEnum
 
 from pymodbus.client.sync import ModbusSerialClient
@@ -77,7 +79,7 @@ class Client:
         return True
 
     @staticmethod
-    def _check_name(name: str) -> dict:
+    def _check_name(name: str) -> dict[str, str | int]:
         """Проверка названия параметра."""
 
         if name not in OSM17:
@@ -135,31 +137,28 @@ class Client:
             msg = f"Unknown edge. Choose from {edges}"
             raise OsmError(msg)
 
-        args = []
+        args: list[tuple[str, int]] = []
+        cmd = CMD.STOP
+
         if speed:
             args.extend((("Direction", speed < 0), ("Speed", abs(speed))))
             if steps:
                 args.append(("StepsNumber", steps))
-                cmd = {"DIR": CMD.MOVE_DIR_N, "STEP": CMD.MOVE_STEP_N,
-                       "IN1": CMD.MOVE_IN1_N, "HOME": CMD.FIND_HOME_N,
-                       "IN2": CMD.MOVE_IN2_N}
-                args.append(("Command", cmd.get(edge, CMD.MOVE_N)))
-            elif edge:
-                cmd = {"DIR": CMD.MOVE_DIR, "STEP": CMD.MOVE_STEP,
-                       "IN1": CMD.MOVE_IN1, "HOME": CMD.FIND_HOME,
-                       "IN2": CMD.MOVE_IN2}
-                args.append(("Command", cmd[edge]))
-            else:
-                args.append(("Command", CMD.MOVE))
-        else:
-            args.append(("Command", CMD.STOP))
+            cmd = {"DIR": (CMD.MOVE_DIR, CMD.MOVE_DIR_N),
+                   "IN1": (CMD.MOVE_IN1, CMD.MOVE_IN1_N),
+                   "IN2": (CMD.MOVE_IN2, CMD.MOVE_IN2_N),
+                   "HOME": (CMD.FIND_HOME, CMD.FIND_HOME_N),
+                   "STEP": (CMD.MOVE_STEP, CMD.MOVE_STEP_N),
+                  }.get(edge, (CMD.MOVE, CMD.MOVE_N))[bool(steps)]
+
+        args.append(("Command", cmd))
 
         for arg in args:
             self.set_param(*arg)
 
         return True
 
-    def state(self) -> dict:    # Таблица 6.4.3 документации
+    def state(self) -> dict[str, bool]:    # Таблица 6.4.3 документации
         """Чтение состояния."""
 
         val = self.get_param("Inputs")
