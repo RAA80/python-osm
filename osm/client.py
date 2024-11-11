@@ -2,8 +2,6 @@
 
 """Реализация класса клиента для управления контроллером шаговых двигателей OSM."""
 
-from __future__ import annotations
-
 from enum import IntEnum
 
 from pymodbus.client.sync import ModbusSerialClient
@@ -11,7 +9,7 @@ from pymodbus.constants import Endian
 from pymodbus.payload import BinaryPayloadBuilder, BinaryPayloadDecoder
 from pymodbus.pdu import ModbusResponse
 
-from .device import OSM17
+from .device import OSM17, OSM_PARAMS
 
 
 class OsmError(Exception):
@@ -79,7 +77,7 @@ class Client:
         return True
 
     @staticmethod
-    def _check_name(name: str) -> dict[str, str | int]:
+    def _check_name(name: str) -> OSM_PARAMS:
         """Проверка названия параметра."""
 
         if name not in OSM17:
