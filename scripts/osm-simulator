@@ -206,10 +206,13 @@ class Driver(Thread):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="OSM stepper driver simulator command-line option")
+    parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter,
+                                     description="OSM stepper driver simulator command-line option",
+                                     epilog="Usage example:\n"
+                                            "osm-simulator --port COM1")
 
     group = parser.add_mutually_exclusive_group()
-    group.add_argument("--port", type=str, help="select port name")
+    group.add_argument("--port", type=str, help="pseudo serial port name")
     args = parser.parse_args()
 
     SimOSM(args.port)

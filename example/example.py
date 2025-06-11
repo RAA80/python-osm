@@ -4,11 +4,13 @@
 
 from time import sleep
 
-from osm.client import Client
+from osm.client import OsmClient
+from pymodbus.client.sync import ModbusSerialClient
 
 if __name__ == "__main__":
-    client = Client(port="COM5", baudrate=115200, unit=1)
-    print(client)
+    transport = ModbusSerialClient(method="rtu", port="COM5", baudrate=115200,
+                                   timeout=0.1, retry_on_empty=True)
+    client = OsmClient(transport=transport, unit=1)
 
     print(f'Set Enable: {client.set_param("Enable", 1)}')   # Остальные названия параметров в файле 'device.py'
     print(f'Set Current: {client.set_param("Current", 100)}')

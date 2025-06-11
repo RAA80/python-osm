@@ -2,14 +2,19 @@
 
 """Реализация класса клиента для управления контроллером шаговых двигателей OSM."""
 
-from enum import IntEnum
+from __future__ import annotations
 
-from pymodbus.client.sync import ModbusSerialClient
+from enum import IntEnum
+from typing import TYPE_CHECKING, TypedDict
+
 from pymodbus.constants import Endian
 from pymodbus.payload import BinaryPayloadBuilder, BinaryPayloadDecoder
-from pymodbus.pdu import ModbusResponse
 
-from .device import OSM17, OSM_PARAMS
+from osm.device import OSM17, OSM_PARAMS
+
+if TYPE_CHECKING:
+    from pymodbus.client.sync import ModbusSerialClient
+    from pymodbus.pdu import ModbusResponse
 
 
 class OsmError(Exception):
@@ -41,32 +46,30 @@ class CMD(IntEnum):     # Таблица 6.4.2 документации
     SAVE_PARAMETERS = 0x13
 
 
-class Client:
+class STATE(TypedDict):
+    HOME: bool
+    IN1: bool
+    IN2: bool
+    DIR: bool
+    EN: bool
+    STEP: bool
+
+
+class OsmClient:
     """Класс для управления контроллером шаговых двигателей OSM."""
 
-    def __init__(self, port: str, baudrate: int, unit: int,
-                       timeout: float = 1.0) -> None:
+    def __init__(self, transport: ModbusSerialClient, unit: int) -> None:
         """Инициализация класса клиента с указанными параметрами."""
 
-        self.socket = ModbusSerialClient(method="rtu", port=port,
-                                         baudrate=baudrate, timeout=timeout)
-        self.socket.connect()
-
-        self.port = port
-        self.baudrate = baudrate
         self.unit = unit
+        self.transport = transport
+        self.transport.connect()
 
     def __del__(self) -> None:
         """Закрытие соединения с устройством при удалении объекта."""
 
-        if self.socket:
-            self.socket.close()
-
-    def __repr__(self) -> str:
-        """Строковое представление объекта."""
-
-        return (f"{type(self).__name__}(port={self.port!r}, "
-                f"baudrate={self.baudrate}, unit={self.unit})")
+        if self.transport:
+            self.transport.close()
 
     @staticmethod
     def _check_error(retcode: ModbusResponse) -> bool:
@@ -92,16 +95,16 @@ class Client:
         dev = self._check_name(name)
 
         count = {"I32": 2, "U32": 2, "U16": 1}[dev["type"]]
-        result = self.socket.read_holding_registers(address=dev["address"],
-                                                    count=count,
-                                                    unit=self.unit)
+        result = self.transport.read_holding_registers(address=dev["address"],
+                                                       count=count,
+                                                       unit=self.unit)
         self._check_error(result)
         decoder = BinaryPayloadDecoder.fromRegisters(result.registers, Endian.Big)
 
         return {"I32": decoder.decode_32bit_int,
                 "U32": decoder.decode_32bit_uint,
                 "U16": decoder.decode_16bit_uint,
-                }[dev["type"]]()
+               }[dev["type"]]()
 
     def set_param(self, name: str, value: int) -> bool:
         """Запись данных в устройство."""
@@ -118,10 +121,10 @@ class Client:
          "U16": builder.add_16bit_uint,
         }[dev["type"]](value)
 
-        result = self.socket.write_registers(address=dev["address"],
-                                             values=builder.build(),
-                                             skip_encode=True,
-                                             unit=self.unit)
+        result = self.transport.write_registers(address=dev["address"],
+                                                values=builder.build(),
+                                                skip_encode=True,
+                                                unit=self.unit)
         return self._check_error(result)
 
     def move(self, speed: int, steps: int = 0, edge: str = "") -> bool:
@@ -156,7 +159,7 @@ class Client:
 
         return True
 
-    def state(self) -> dict[str, bool]:    # Таблица 6.4.3 документации
+    def state(self) -> STATE:               # Таблица 6.4.3 документации
         """Чтение состояния."""
 
         val = self.get_param("Inputs")
@@ -173,4 +176,4 @@ class Client:
         return self.set_param("Command", CMD.RESET)
 
 
-__all__ = ["Client"]
+__all__ = ["OsmClient"]

@@ -5,17 +5,29 @@ import contextlib
 import logging
 import time
 
-from osm.client import Client
+from osm.client import OsmClient
 from osm.device import OSM17
+from pymodbus.client.sync import ModbusSerialClient
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="OSM controllers command-line option")
+    parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter,
+                                     description="OSM controllers command-line option",
+                                     epilog="Usage example:\n"
+                                            "osm-console --port COM1 --scan\n"
+                                            "osm-console --port COM1 --baudrate 57600 --unit 1 --state\n"
+                                            "osm-console --port COM1 --baudrate 57600 --unit 1 --reset\n"
+                                            "osm-console --port COM1 --baudrate 57600 --unit 1 --get Enable\n"
+                                            "osm-console --port COM1 --baudrate 57600 --unit 1 --set Enable 1\n"
+                                            "osm-console --port COM1 --baudrate 57600 --unit 1 --move 100 0 ''\n"
+                                            "osm-console --port COM1 --baudrate 57600 --unit 1 --move 100 1000 ''\n"
+                                            "osm-console --port COM1 --baudrate 57600 --unit 1 --move 100 0 IN1\n"
+                                            "osm-console --port COM1 --baudrate 57600 --unit 1 --move 100 1000 IN1\n")
 
     parser.add_argument("--port", type=str, required=True,
-                                  help="select port name")
+                                  help="serial port name")
     parser.add_argument("--timeout", type=float, nargs="?", metavar=("VALUE"),
                                      const=0.2,
-                                     help="select timeout in seconds")
+                                     help="timeout in seconds")
     parser.add_argument("--debug", action="store_true",
                                    help="print debug information")
     group1 = parser.add_argument_group("Scanner")
@@ -47,15 +59,24 @@ if __name__ == "__main__":
     if args.scan:
         for baudrate in (115200, 57600, 38400, 19200, 9600, 4800, 2400, 1200):
             for unit in range(1, 33):
-                client = Client(port=args.port, baudrate=baudrate, unit=unit,
-                                timeout=timeout)
+                transport = ModbusSerialClient(method="rtu",
+                                               port=args.port,
+                                               baudrate=baudrate,
+                                               timeout=timeout,
+                                               retry_on_empty=False)
+                client = OsmClient(transport=transport, unit=unit)
+
                 with contextlib.suppress(Exception):
                     if client.state():
                         print(f"Unit: {unit}, Baudrate: {baudrate} - OK")
                         time.sleep(timeout)
     else:
-        client = Client(port=args.port, baudrate=args.baudrate, unit=args.unit,
-                        timeout=timeout)
+        transport = ModbusSerialClient(method="rtu",
+                                       port=args.port,
+                                       baudrate=args.baudrate,
+                                       timeout=timeout,
+                                       retry_on_empty=True)
+        client = OsmClient(transport=transport, unit=args.unit)
         if args.state:
             print(client.state())
         elif args.reset:
